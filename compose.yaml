@@ -1,0 +1,62 @@
+name: izge
+x-backend: &backend
+  build: .
+  image: izge:0.1.0
+  environment: &environment
+    DATABASE_URL: postgresql+psycopg://izge:${POSTGRES_PASSWORD:-izge-local}@db:5432/izge
+    IZGE_APP_NAME: ${IZGE_APP_NAME:-İzge}
+    MEDIA_ROOT: /data/media
+    MAX_UPLOAD_BYTES: ${MAX_UPLOAD_BYTES:-2147483648}
+    EVIDENCE_RETENTION_DAYS: ${EVIDENCE_RETENTION_DAYS:-90}
+  volumes:
+    - media:/data/media
+  init: true
+services:
+  db:
+    image: postgres:18.0-bookworm
+    environment:
+      POSTGRES_USER: izge
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-izge-local}
+      POSTGRES_DB: izge
+    volumes:
+      - database:/var/lib/postgresql
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U izge -d izge']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+  migrate:
+    <<: *backend
+    command: [alembic, upgrade, head]
+    depends_on:
+      db:
+        condition: service_healthy
+  api:
+    <<: *backend
+    ports:
+      - '127.0.0.1:8000:8000'
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: [CMD, python, -c, 'import urllib.request; urllib.request.urlopen("http://127.0.0.1:8000/api/health", timeout=3)']
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+  worker:
+    <<: *backend
+    command: [python, -m, izge.worker]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: [CMD, python, -m, izge.worker_health]
+      interval: 20s
+      timeout: 5s
+      retries: 4
+    restart: unless-stopped
+volumes:
+  database:
+  media:

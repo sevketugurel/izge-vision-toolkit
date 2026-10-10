@@ -1,0 +1,94 @@
+# İzge
+
+Saha kayıtları, video işleme, PostgreSQL iş kuyruğu, günlük kapsam raporu ve insan incelemesi için modüler monolit. GPU gerekmez. **Gerçek bir davranış modeli bağlı değildir.** Gerçek dosya adaptörü kareleri CPU üzerinde çözer ve `unavailable` gözlemleri üretir. Sentetik analiz yalnızca ayrı demo işletmesinde kullanılabilir.
+
+> Teslim durumu: uygulama kaynakları ve yerel testler hazır; bu ortamda ağ/DNS, Docker soketi ve yerel port açma engelleri var. PostgreSQL 18 entegrasyonu, Compose açılışı ve tarayıcı smoke testi doğrulanamadı. Backend `uv.lock` henüz üretilemedi. Tam sürüm doğrulaması tamamlanmış değildir. Ayrıntılar: [doğrulama kaydı](docs/VERIFICATION.md).
+
+## Başlatma
+
+Docker ve paket ağ erişimi olan bir makinede:
+
+```sh
+cp .env.example .env
+docker compose up --build
+```
+
+Arayüz: http://127.0.0.1:8000 · OpenAPI: http://127.0.0.1:8000/docs
+
+PostgreSQL sağlıklı olmadan migration; migration tamamlanmadan API ve worker başlamaz. Uygulama portu yalnızca localhost'a açılır. PostgreSQL portu dışarı yayımlanmaz. Veritabanı ve medya adlandırılmış volume'lerde kalır. `docker compose down` verileri korur; `down -v` verileri siler.
+
+### Sentetik demo
+
+```sh
+docker compose exec api python -m izge.demo
+```
+
+Üç hayvan, üç yer, iki kamera, 30 saniyelik iki yerel test videosu ve iki analiz işi oluşturur. Gerçek dosyalar bu işletmeye yüklenemez; ayrı bir işletme kullanılır. Worker aynı analiz/lease/yayınlama yolunu kullanır. İşletme, medya, sonuç ve dışa aktarımlar demo bilgisini taşır. Bu komut tekrar çalıştırılabilir; var olan demo işletmesini kullanır. Sayfayı yenileyip **Örnek Çiftlik — SENTETİK DEMO** işletmesini seçin.
+
+### Gerçek kayıt akışı
+
+1. İşletme, ahır, kamera, yer ve hayvan oluşturun. Yerleşim başlangıcını gerçek geçmiş tarih/saatle girin.
+2. Kamera için MP4/MOV/MKV/AVI yükleyin. Yükleme zamanı kayıt zamanı değildir.
+3. Saha ayarlarında video karesi üzerinde gövde/baş/yemlik çokgenlerini çizin ve doğrulayın. Kamera taşındığında veya çözünürlük değiştiğinde yeniden doğrulama gerekir.
+4. Videonun kayıt başlangıcını bir doğrulama notuyla kaydedin. Saatler arayüzde cihaz saat diliminde girilir, UTC'ye dönüştürülür. Raporun günü işletme saat dilimindedir.
+5. Analizi başlatın. **Model bağlı değil** durumunda sonuçların bilinmeyen kalması beklenir; sentetik sonuç üretilmez.
+6. İnceleme ekranında kaynak video offsetiyle etiket ekleyin; düzeltme için önceki etiketi seçin. Olay varsa kanıt klibini açıp karar ekleyin.
+7. JSON/CSV dışa aktarımını indirin. Köken, zaman eşleme sürümü, analiz bağlamı ve inceleme geçmişi korunur.
+
+**Manuel etiket ve doğrulanmış düzeltmeler otomatik günlük süreleri değiştirmez.** Tarihli rapora girmek için kayıt saati doğrulanmış ve analiz başarıyla yayımlanmış olmalıdır. Kayıt saati düzeltmesi önceki sonuçları değiştirmez; yeni analiz oluşturun.
+
+## Yerel geliştirme
+
+Python 3.14, Node 22.18+, FFmpeg/ffprobe ve PostgreSQL 18 gerekir. `btree_gist` extension kurulabilmelidir.
+
+```sh
+# Paket ağı açıkken gerçek resolver lock üretin ve repoya ekleyin:
+uv lock
+uv sync --locked
+export PYTHONPATH=backend
+export DATABASE_URL=postgresql+psycopg://izge:izge-local@127.0.0.1:5432/izge
+uv run alembic upgrade head
+uv run uvicorn izge.api:app --host 127.0.0.1 --port 8000
+# Ayrı terminallerde:
+uv run python -m izge.worker
+npm ci --prefix frontend
+npm run dev --prefix frontend
+```
+
+Frontend Vite geliştirme sunucusu `/api` isteklerini port 8000'e yönlendirir. Üretim frontend derlemesi FastAPI tarafından sunulur. Uygulama adı yalnızca `IZGE_APP_NAME` ile belirlenir; arayüz `/api/config` üzerinden alır.
+
+## Kontroller
+
+Bağımlılık gerektirmeyen domain testleri ve yerel video araçları:
+
+```sh
+PYTHONPATH=backend python3 -m unittest discover -s backend/tests -p test_domain.py -v
+PYTHONPATH=backend python3 -m unittest discover -s backend/tests -p test_identity.py -v
+PYTHONPATH=backend python3 -m unittest discover -s backend/tests -p test_video_tools.py -v
+npm run build --prefix frontend
+npm run smoke --prefix frontend
+```
+
+Smoke, açıkça test fixture'ları kullanan altı ekranlık **frontend** tarayıcı kontrolüdür; backend uçtan uca testinin yerine geçmez. `CHROME_BIN` ile Chromium/Chrome yolu verilebilir.
+
+Gerçek PostgreSQL 18 üzerinde entegrasyon testleri:
+
+```sh
+# Yalnızca boş/geçici test veritabanı kullanın; suite migration ve test kayıtları oluşturur.
+DATABASE_URL=postgresql+psycopg://izge:izge-local@localhost:5432/izge_test \
+  IZGE_TEST_DATABASE=1 uv run pytest backend/tests/test_integration.py -v
+```
+
+Suite PostgreSQL 14'ü kabul etmez. Saha veritabanında çalıştırmayın.
+
+## Operasyon ve sınırlar
+
+- Lease 60 sn, heartbeat 15 sn, en fazla 3 deneme; 5/20 sn geri çekilme. Worker kaybında checkpoint'ten devam edilir. Eski lease sahibinin sonuç yazması reddedilir.
+- Ham gözlemler, anotasyonlar, zaman eşlemeleri ve incelemeler eklemeli geçmişlerdir. Kısmi sonuçlar rapora katılmaz.
+- Orijinal videolar otomatik silinmez. İncelemeye alınan kanıt tutulur. Diğer olay klipleri varsayılan 90 gün sonra `docker compose exec api python -m izge.maintenance` ile temizlenebilir.
+- RTSP adapter sınıfı secret referansı, timeout, reconnect ve sınırlı tampon içerir. **Sürekli canlı kayıt/worker entegrasyonu, gerçek NVR ve saha bağlantısı henüz doğrulanmış veya işletime alınmış değildir.** API kayıtları için health alanı vardır; dosya worker'ı RTSP oturumu başlatmaz.
+- Kimlik doğrulama ve kullanıcı/işletme yetkilendirmesi bu localhost sürümünde yoktur. Uzak kullanım öncesi bunlar, TLS ve operasyonel saklama/yedekleme politikası eklenmelidir. Ağ/port yönlendirme değişikliği yapılmadı.
+- Dosya işleme ve demo sonuçları gerçek canlı alarm gecikmesinin kanıtı değildir.
+- İlk analizde uzun videonun gözlemleri türetme aşamasında belleğe alınır; büyük saha kayıtları için bellek/performans testi ve artımlı türetme gerekir.
+
+[Mimari](docs/ARCHITECTURE.md) · [Proje bağlamı](docs/CONTEXT.md) · [Yol haritası ve pilot girdileri](docs/ROADMAP.md) · [Üçüncü taraflar](THIRD_PARTY.md)

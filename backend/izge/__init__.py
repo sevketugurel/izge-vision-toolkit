@@ -1,0 +1,1 @@
+"""İzge modular monolith."""
