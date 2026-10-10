@@ -2,7 +2,7 @@
 
 Saha kayıtları, video işleme, PostgreSQL iş kuyruğu, günlük kapsam raporu ve insan incelemesi için modüler monolit. GPU gerekmez. **Gerçek bir davranış modeli bağlı değildir.** Gerçek dosya adaptörü kareleri CPU üzerinde çözer ve `unavailable` gözlemleri üretir. Sentetik analiz yalnızca ayrı demo işletmesinde kullanılabilir.
 
-> Teslim durumu: uygulama kaynakları ve yerel testler hazır; bu ortamda ağ/DNS, Docker soketi ve yerel port açma engelleri var. PostgreSQL 18 entegrasyonu, Compose açılışı ve tarayıcı smoke testi doğrulanamadı. Backend `uv.lock` henüz üretilemedi. Tam sürüm doğrulaması tamamlanmış değildir. Ayrıntılar: [doğrulama kaydı](docs/VERIFICATION.md).
+> Teslim durumu: `make verify` (lint, birim, PostgreSQL 18 entegrasyon + migration gidiş-dönüş, frontend build, Compose yığını, Playwright e2e) temiz klonda geçiyor. v1 planı: [docs/V1_PLAN.md](docs/V1_PLAN.md). Ayrıntılar: [doğrulama kaydı](docs/VERIFICATION.md).
 
 ## Başlatma
 
@@ -42,9 +42,7 @@ docker compose exec api python -m izge.demo
 Python 3.14, Node 22.18+, FFmpeg/ffprobe ve PostgreSQL 18 gerekir. `btree_gist` extension kurulabilmelidir.
 
 ```sh
-# Paket ağı açıkken gerçek resolver lock üretin ve repoya ekleyin:
-uv lock
-uv sync --locked
+uv sync --frozen
 export PYTHONPATH=backend
 export DATABASE_URL=postgresql+psycopg://izge:izge-local@127.0.0.1:5432/izge
 uv run alembic upgrade head
@@ -59,27 +57,12 @@ Frontend Vite geliştirme sunucusu `/api` isteklerini port 8000'e yönlendirir. 
 
 ## Kontroller
 
-Bağımlılık gerektirmeyen domain testleri ve yerel video araçları:
-
 ```sh
-PYTHONPATH=backend python3 -m unittest discover -s backend/tests -p test_domain.py -v
-PYTHONPATH=backend python3 -m unittest discover -s backend/tests -p test_identity.py -v
-PYTHONPATH=backend python3 -m unittest discover -s backend/tests -p test_video_tools.py -v
-npm run build --prefix frontend
-npm run smoke --prefix frontend
+make verify   # lint, birim, PG18 entegrasyon, frontend build, Compose yığını, Playwright e2e
+make test     # yalnız birim testleri
 ```
 
-Smoke, açıkça test fixture'ları kullanan altı ekranlık **frontend** tarayıcı kontrolüdür; backend uçtan uca testinin yerine geçmez. `CHROME_BIN` ile Chromium/Chrome yolu verilebilir.
-
-Gerçek PostgreSQL 18 üzerinde entegrasyon testleri:
-
-```sh
-# Yalnızca boş/geçici test veritabanı kullanın; suite migration ve test kayıtları oluşturur.
-DATABASE_URL=postgresql+psycopg://izge:izge-local@localhost:5432/izge_test \
-  IZGE_TEST_DATABASE=1 uv run pytest backend/tests/test_integration.py -v
-```
-
-Suite PostgreSQL 14'ü kabul etmez. Saha veritabanında çalıştırmayın.
+Ayrıntılar ve son sonuçlar: [docs/VERIFICATION.md](docs/VERIFICATION.md). Entegrasyon testleri yalnızca `compose.test.yaml` ile açılan geçici PostgreSQL 18'e karşı koşar; saha veritabanında çalıştırmayın. Suite PostgreSQL 14'ü kabul etmez.
 
 ## Operasyon ve sınırlar
 
@@ -91,4 +74,4 @@ Suite PostgreSQL 14'ü kabul etmez. Saha veritabanında çalıştırmayın.
 - Dosya işleme ve demo sonuçları gerçek canlı alarm gecikmesinin kanıtı değildir.
 - İlk analizde uzun videonun gözlemleri türetme aşamasında belleğe alınır; büyük saha kayıtları için bellek/performans testi ve artımlı türetme gerekir.
 
-[Mimari](docs/ARCHITECTURE.md) · [Proje bağlamı](docs/CONTEXT.md) · [Yol haritası ve pilot girdileri](docs/ROADMAP.md) · [Üçüncü taraflar](THIRD_PARTY.md)
+[Mimari](docs/ARCHITECTURE.md) · [Proje bağlamı](docs/CONTEXT.md) · [Yol haritası ve pilot girdileri](docs/ROADMAP.md) · [Üçüncü taraflar](docs/THIRD_PARTY_LICENSES.md)
