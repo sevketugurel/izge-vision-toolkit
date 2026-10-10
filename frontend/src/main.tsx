@@ -205,6 +205,8 @@ function App() {
       </option>
     ));
   const choose = (next: string) => {
+    // Re-selecting the current farm must not invalidate its in-flight load.
+    if (next === farm) return;
     generation.current++;
     setFarm(next);
     setData({});

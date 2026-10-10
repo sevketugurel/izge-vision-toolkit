@@ -11,3 +11,5 @@ media/
 artifacts/
 
 *.tsbuildinfo
+.test-media/
+test-results/

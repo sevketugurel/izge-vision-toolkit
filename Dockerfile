@@ -3,7 +3,7 @@ WORKDIR /build/frontend
 COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci
 COPY frontend/ ./
-RUN NAPI_RS_FORCE_WASI=error npm run build
+RUN npm run build
 COPY scripts/frontend_licenses.mjs /build/scripts/frontend_licenses.mjs
 RUN node /build/scripts/frontend_licenses.mjs
 
@@ -17,11 +17,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg ca-certi
     && useradd --uid 10001 --create-home izge \
     && mkdir -p /data/media /app && chown -R izge:izge /data /app
 WORKDIR /app
-COPY --chown=izge:izge pyproject.toml ./
-# Generate a real resolver lock during build until an online uv.lock is committed.
-# See docs/VERIFICATION.md: this environment could not resolve backend packages.
+COPY --chown=izge:izge pyproject.toml uv.lock ./
 USER izge
-RUN uv sync --no-dev
+RUN uv sync --frozen --no-dev
 COPY --chown=izge:izge backend ./backend
 COPY --chown=izge:izge alembic.ini ./
 COPY --chown=izge:izge scripts/license_inventory.py ./scripts/license_inventory.py

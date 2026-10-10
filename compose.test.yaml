@@ -1,0 +1,19 @@
+# Disposable PostgreSQL 18 for integration tests. Never point tests at a farm database.
+# Usage: docker compose -f compose.test.yaml up -d --wait
+name: izge-test
+services:
+  test-db:
+    image: postgres:18.0-bookworm
+    environment:
+      POSTGRES_USER: izge
+      POSTGRES_PASSWORD: izge-test
+      POSTGRES_DB: izge_test
+    ports:
+      - '127.0.0.1:${IZGE_TEST_DB_PORT:-55432}:5432'
+    tmpfs:
+      - /var/lib/postgresql
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U izge -d izge_test']
+      interval: 2s
+      timeout: 3s
+      retries: 30
