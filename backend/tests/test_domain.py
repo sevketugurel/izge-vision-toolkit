@@ -12,7 +12,8 @@ class DomainTests(unittest.TestCase):
         return Observation(**(values|kwargs))
 
     def test_unknown_and_long_gaps_never_extend(self):
-        rows=[self.sample(0),self.sample(1),self.sample(2,body_visible=False,head_visible=False),self.sample(9),self.sample(10)]
+        rows=[self.sample(t,activity='idle') for t in (0,1)]+[self.sample(2,activity='idle',body_visible=False,head_visible=False)]
+        rows+=[self.sample(t,activity='idle') for t in (9,10)]
         intervals=derive_intervals(rows)
         self.assertFalse(any(x['end_offset']>10 for x in intervals))
         self.assertEqual(sum(x['end_offset']-x['start_offset'] for x in intervals if x['dimension']=='activity'),2)
@@ -87,6 +88,10 @@ class DomainTests(unittest.TestCase):
         self.assertFalse(FeedingAccessRule().evaluate(sparse,PILOT_CONFIG)[0]['sufficient'])
         dense=[self.sample(0,signal='approach')]+[self.sample(t,signal='interference') for t in range(1,18)]+[self.sample(18,signal='withdrawal')]
         self.assertTrue(FeedingAccessRule().evaluate(dense,PILOT_CONFIG)[0]['sufficient'])
+
+    def test_zone_rule_never_produces_feeding(self):
+        rows=[self.sample(i) for i in range(10)]
+        self.assertFalse([x for x in derive_intervals(rows) if x['label']=='feeding'])
 
     def test_feed_visibility_is_not_feed_evidence(self):
         rows=[self.sample(i,feed_present=None) for i in range(5)]

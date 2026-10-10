@@ -17,6 +17,9 @@ def seed():
         db.execute(text("SELECT pg_advisory_xact_lock(7340291)"))
         existing = db.execute(select(s.farms).where(s.farms.c.is_demo.is_(True))).mappings().first()
         if existing:
+            barn = db.execute(select(s.barns.c.id).where(s.barns.c.farm_id == existing['id'])).scalar()
+            if barn:
+                feeding_demo(db, storage, existing['id'], barn)
             print(f"Demo hazır: {existing['id']}")
             return existing['id']
         farm_id, barn_id = uuid.uuid4(),uuid.uuid4()
@@ -56,8 +59,36 @@ def seed():
                 derivative(path,storage.path(child),kind)
                 db.execute(s.evidence.insert().values(farm_id=farm_id,media_id=media_id,kind=kind,storage_key=child,start_offset=0,end_offset=30))
             create_run(db,farm_id,media_id,'demo-1')
+        feeding_demo(db, storage, farm_id, barn_id)
         print(f'Demo oluşturuldu: {farm_id}. İşleri worker işleyecek.')
         return farm_id
+
+def feeding_demo(db, storage, farm_id, barn_id, minutes=10):
+    """Stall feeding demo: synthetic 10-minute video and the synthetic feeding-demo-1 analyzer."""
+    if db.execute(select(s.cameras.c.id).where(s.cameras.c.farm_id == farm_id,
+                                               s.cameras.c.config_key == 'sentetik_demo')).first():
+        return
+    camera_id, media_id = uuid.uuid4(), uuid.uuid4()
+    db.execute(s.cameras.insert().values(id=camera_id, farm_id=farm_id, barn_id=barn_id, name='Demo Yemde Kamerası',
+        width=640, height=360, config_key='sentetik_demo'))
+    recorded_at = datetime.now(timezone.utc).replace(microsecond=0) - timedelta(minutes=minutes + 5)
+    key = uuid.uuid4().hex + '.mp4'
+    path = storage.path(key)
+    run_tool(['ffmpeg', '-nostdin', '-v', 'error', '-y', '-f', 'lavfi', '-i',
+              f'testsrc2=size=640x360:rate=2:duration={minutes * 60}', '-c:v', 'libx264', '-threads', '2',
+              '-pix_fmt', 'yuv420p', str(path)], timeout=600)
+    db.execute(s.media.insert().values(id=media_id, farm_id=farm_id, camera_id=camera_id, storage_key=key,
+        checksum=hashlib.sha256(path.read_bytes()).hexdigest(), filename='SENTETIK-DEMO-YEMDE.mp4',
+        metadata=probe(path), origin='demo', current_time_version=1))
+    db.execute(s.time_maps.insert().values(farm_id=farm_id, media_id=media_id, version=1, recorded_at=recorded_at,
+                                           note='Sentetik demo zaman eşlemesi'))
+    for kind, ext in (('thumbnail', '.jpg'), ('preview', '.mp4')):
+        child = uuid.uuid4().hex + ext
+        derivative(path, storage.path(child), kind)
+        db.execute(s.evidence.insert().values(farm_id=farm_id, media_id=media_id, kind=kind, storage_key=child,
+                                              start_offset=0, end_offset=minutes * 60))
+    create_run(db, farm_id, media_id, 'feeding-demo-1')
+
 
 if __name__=='__main__':
     seed()

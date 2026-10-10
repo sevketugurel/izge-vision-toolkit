@@ -25,14 +25,15 @@ cleanup() {
 }
 trap cleanup EXIT
 
-step "Python bağımlılıkları (uv.lock)"
-uv sync --frozen
+step "Python bağımlılıkları (uv.lock, ml eki dahil)"
+uv sync --frozen --extra ml
 
 step "Lint (ruff)"
 uv run ruff check backend scripts
 
 step "Birim testleri"
-uv run pytest -q -p no:cacheprovider --ignore=backend/tests/test_integration.py
+uv run pytest -q -p no:cacheprovider --ignore=backend/tests/test_integration.py \
+  --ignore=backend/tests/test_feeding_integration.py
 
 step "PostgreSQL 18 (Compose) + migration gidiş-dönüş"
 docker compose -f compose.test.yaml -p "$DB_PROJECT" up -d --wait
@@ -41,9 +42,11 @@ uv run alembic upgrade head
 uv run alembic downgrade base
 uv run python scripts/check_empty_schema.py
 uv run alembic upgrade head
+uv run alembic check
 
 step "Entegrasyon testleri (PostgreSQL 18)"
-IZGE_TEST_DATABASE=1 MEDIA_ROOT="$MEDIA_TMP" uv run pytest -q -p no:cacheprovider backend/tests/test_integration.py
+IZGE_TEST_DATABASE=1 MEDIA_ROOT="$MEDIA_TMP" uv run pytest -q -p no:cacheprovider backend/tests/test_integration.py \
+  backend/tests/test_feeding_integration.py
 unset DATABASE_URL PYTHONPATH
 
 step "Frontend kurulum ve build"
@@ -51,9 +54,13 @@ npm ci --prefix frontend --no-audit --no-fund
 npm run build --prefix frontend
 
 step "Compose yığını (API + worker + PostgreSQL 18)"
+# The e2e stack also loads the test-only synthetic camera config.
+export IZGE_CAMERA_CONFIG_DIRS=/app/config/cameras:/app/backend/tests/fixtures/cameras
 IZGE_PORT="$E2E_PORT" docker compose -p "$E2E_PROJECT" up -d --build --wait
 curl -fsS "http://127.0.0.1:$E2E_PORT/api/health"
 echo
+step "Sentetik demo tohumu (DEMO işaretli)"
+IZGE_PORT="$E2E_PORT" docker compose -p "$E2E_PROJECT" exec -T api python -m izge.demo
 
 step "Playwright e2e"
 (cd frontend && npx playwright install chromium >/dev/null && IZGE_E2E_URL="http://127.0.0.1:$E2E_PORT" npx playwright test)

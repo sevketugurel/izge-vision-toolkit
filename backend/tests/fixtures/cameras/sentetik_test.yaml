@@ -1,0 +1,14 @@
+# Test-only synthetic camera: two stalls, left and right halves of a 320×180 frame.
+camera_id: sentetik_test
+name: SENTETİK TEST KAMERASI
+barn: TEST AHIRI
+placeholder: false
+timezone: Europe/Istanbul
+reference_resolution: {width: 320, height: 180}
+filename_time:
+  pattern: '(?P<Y>\d{4})(?P<m>\d{2})(?P<d>\d{2})_(?P<H>\d{2})(?P<M>\d{2})(?P<S>\d{2})'
+smoothing: {window_seconds: 5, enter: 0.6, exit: 0.4, gap_merge_seconds: 30}
+sampling: {per_stratum: 30}
+stalls:
+  - {id: A, sira: orta, mesafe: yakin, box: [0, 0, 160, 180]}
+  - {id: B, sira: sag, mesafe: uzak, polygon: [[160, 0], [320, 0], [320, 180], [160, 180]]}

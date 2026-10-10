@@ -8,7 +8,7 @@ from datetime import datetime, date, timezone
 from pathlib import Path
 from typing import Literal
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
-from fastapi import FastAPI, Depends, HTTPException, UploadFile, File
+from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Form
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field, AwareDatetime, field_validator
@@ -23,6 +23,8 @@ from .analysis import get_scoped, create_run
 from .adapters import ANALYZERS
 from .video import LocalStorage, probe, derivative
 from .reporting import daily_report
+from .feeding import camera_config
+from .feeding_api import router as feeding_router
 
 app = FastAPI(title=APP_NAME, version='0.1.0')
 
@@ -51,6 +53,7 @@ class UploadLimit:
         await self.app(scope, bounded_receive, send)
 
 app.add_middleware(UploadLimit)
+app.include_router(feeding_router)
 
 @app.exception_handler(IntegrityError)
 async def integrity_error(request, exc):
@@ -82,6 +85,13 @@ class Named(Input):
 class CameraInput(Named):
     barn_id: uuid.UUID
     secret_ref: str | None = Field(default=None,pattern=r'^IZGE_RTSP_[A-Z0-9_]+$')
+    config_key: str | None = Field(default=None,pattern=r'^[a-z0-9][a-z0-9_-]{0,79}$')
+    @field_validator('config_key')
+    @classmethod
+    def known_config(cls,v):
+        if v is not None:
+            camera_config.load(v)
+        return v
 class StallInput(Named):
     barn_id: uuid.UUID
 class AnimalInput(Input):
@@ -118,6 +128,7 @@ class TimeInput(Input):
 class RunInput(Input):
     media_id: uuid.UUID
     analyzer: str = Field(default='unavailable-1', min_length=1, max_length=80)
+    model_id: uuid.UUID | None = None
     start_offset: float = Field(default=0,ge=0)
     end_offset: float | None = Field(default=None,gt=0)
 class AnnotationInput(Input):
@@ -149,6 +160,15 @@ RESOURCES = {'barns':s.barns,'cameras':s.cameras,'stalls':s.stalls,'animals':s.a
     'feeding-windows':s.feeding_windows,'feed-presence':s.feed_presence,'notifications':s.notifications,'system-events':s.system_events}
 
 
+def parse_local_time(value: str, timezone: str) -> datetime:
+    """ISO date-time; without an offset it is local time in the camera timezone."""
+    try:
+        parsed = datetime.fromisoformat(value)
+    except ValueError:
+        raise ValueError('Kayıt başlangıcı tarih-saat biçiminde olmalı (örn. 2026-10-10T14:30:00)')
+    return parsed if parsed.tzinfo else parsed.replace(tzinfo=ZoneInfo(timezone))
+
+
 def ensure_farm(db,farm_id):
     farm = db.execute(select(s.farms).where(s.farms.c.id==farm_id)).mappings().first()
     if not farm:
@@ -171,7 +191,7 @@ def add(db,table,farm_id,values):
 
 @app.get('/api/config')
 def config():
-    model_ids = sorted(key for key, spec in ANALYZERS.items() if spec.origin == 'model')
+    model_ids = sorted(key for key, spec in ANALYZERS.items() if spec.origin == 'model' and spec.kind == 'observation')
     return dict(app_name=APP_NAME,model_status='Model hazır' if model_ids else 'Model bağlı değil',
                 default_analyzer=model_ids[0] if model_ids else 'unavailable-1',
                 local_only=True,pilot_config=PILOT_CONFIG,max_upload_bytes=MAX_UPLOAD_BYTES)
@@ -304,12 +324,27 @@ def new_feed(farm_id: uuid.UUID,data: FeedPresenceInput,db: DBSession=DB):
     return add(db,s.feed_presence,farm_id,data.model_dump() | {'origin':'manual'})
 
 @app.post(BASE+'/media',status_code=201)
-def upload(farm_id: uuid.UUID,camera_id: uuid.UUID,file: UploadFile=File(...),db: DBSession=DB):
+def upload(farm_id: uuid.UUID,camera_id: uuid.UUID,file: UploadFile=File(...),recorded_at: str | None=Form(None),
+           db: DBSession=DB):
     if ensure_farm(db, farm_id)['is_demo']:
         raise ValueError('Gerçek dosya için ayrı bir işletme oluşturun; demo işletmesine dosya yüklenemez')
     camera = get_scoped(db,s.cameras,farm_id,camera_id,lock=True)
     suffix = Path(file.filename or '').suffix.lower()
-    if suffix not in ('.mp4','.mov','.mkv','.avi'):
+    stall_config = camera_config.load(camera['config_key']) if camera['config_key'] else None
+    time_note, start_time = None, None
+    if stall_config:
+        # v1 stall pipeline input: NVR MP4 (H.264) with a known recording start (Decision 1).
+        if suffix != '.mp4':
+            raise ValueError(f'Bu kamera için yalnız H.264 MP4 kayıt desteklenir (yüklenen uzantı: {suffix or "yok"})')
+        if recorded_at:
+            start_time = parse_local_time(recorded_at, stall_config.timezone)
+            time_note = 'Yükleme formunda girildi'
+        else:
+            start_time = stall_config.recorded_at_from_filename(Path(file.filename or '').name)
+            time_note = f'Dosya adından okundu (config regex: {stall_config.filename_time.pattern})' if start_time else None
+        if start_time is None:
+            raise ValueError('Kayıt başlangıcı dosya adından okunamadı; yükleme formunda kayıt başlangıcını girin')
+    elif suffix not in ('.mp4','.mov','.mkv','.avi'):
         raise ValueError('MP4, MOV, MKV veya AVI yükleyin')
     storage, key = LocalStorage(), uuid.uuid4().hex+suffix
     path = storage.path(key)
@@ -324,12 +359,17 @@ def upload(farm_id: uuid.UUID,camera_id: uuid.UUID,file: UploadFile=File(...),db
                 digest.update(chunk)
                 out.write(chunk)
         meta = probe(path)
+        if stall_config and (meta['codec'] != 'h264' or 'mp4' not in meta['format'].split(',')):
+            raise ValueError(f"Bu kamera için yalnız H.264 MP4 desteklenir (dosya: {meta['codec']} / {meta['format']})")
         if (camera['width'],camera['height'])!=(meta['width'],meta['height']):
             db.execute(update(s.cameras).where(s.cameras.c.id==camera_id).values(width=meta['width'],height=meta['height'],
                 geometry_valid=False,geometry_version=camera['geometry_version']+1))
         row = db.execute(s.media.insert().values(farm_id=farm_id,camera_id=camera_id,storage_key=key,
-            checksum=digest.hexdigest(),filename=Path(file.filename or 'video').name[:200],metadata=meta,origin='unavailable')
-            .returning(s.media)).mappings().one()
+            checksum=digest.hexdigest(),filename=Path(file.filename or 'video').name[:200],metadata=meta,origin='unavailable',
+            current_time_version=1 if start_time else 0).returning(s.media)).mappings().one()
+        if start_time:
+            db.execute(s.time_maps.insert().values(farm_id=farm_id,media_id=row['id'],version=1,
+                recorded_at=start_time,note=time_note))
         for kind,ext in (('thumbnail','.jpg'),('preview','.mp4')):
             child_key = uuid.uuid4().hex+ext
             child = storage.path(child_key)
@@ -380,7 +420,7 @@ def confirm_time(farm_id: uuid.UUID,media_id: uuid.UUID,data: TimeInput,db: DBSe
 
 @app.post(BASE+'/runs',status_code=201)
 def new_run(farm_id: uuid.UUID,data: RunInput,db: DBSession=DB):
-    run = create_run(db,farm_id,data.media_id,data.analyzer,data.start_offset,data.end_offset)
+    run = create_run(db,farm_id,data.media_id,data.analyzer,data.start_offset,data.end_offset,data.model_id)
     db.commit()
     return run
 

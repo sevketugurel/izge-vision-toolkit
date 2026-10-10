@@ -11,3 +11,5 @@ artifacts
 .test-pg
 
 frontend/licenses
+.test-media
+test-results

@@ -8,8 +8,13 @@ x-backend: &backend
     MEDIA_ROOT: /data/media
     MAX_UPLOAD_BYTES: ${MAX_UPLOAD_BYTES:-2147483648}
     EVIDENCE_RETENTION_DAYS: ${EVIDENCE_RETENTION_DAYS:-90}
+    IZGE_CAMERA_CONFIG_DIRS: ${IZGE_CAMERA_CONFIG_DIRS:-/app/config/cameras}
+    # Gated DINOv3 weights; leave empty to run without the real backbone (demo/labeling still work).
+    HF_TOKEN: ${HF_TOKEN:-}
   volumes:
     - media:/data/media
+    - hf:/data/hf
+    - ./config/cameras:/app/config/cameras:ro
   init: true
 services:
   db:
@@ -60,3 +65,4 @@ services:
 volumes:
   database:
   media:
+  hf:

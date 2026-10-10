@@ -13,3 +13,8 @@ artifacts/
 *.tsbuildinfo
 .test-media/
 test-results/
+data/
+*.safetensors
+*.pt
+*.pth
+*.onnx

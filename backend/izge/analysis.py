@@ -22,16 +22,22 @@ def get_scoped(db, table, farm_id, ident, lock=False):
     return dict(row)
 
 
-def create_run(db, farm_id, media_id, analyzer='unavailable-1', start=0., end=None):
+def create_run(db, farm_id, media_id, analyzer='unavailable-1', start=0., end=None, model_id=None):
     media = get_scoped(db, s.media, farm_id, media_id, lock=True)
     farm = db.execute(select(s.farms).where(s.farms.c.id == farm_id)).mappings().one()
     spec = ANALYZERS.get(analyzer)
-    if spec is None or (spec.demo_only and (not farm['is_demo'] or media['origin'] != 'demo')):
+    if spec is None:
+        raise ValueError("Bilinmeyen analiz türü")
+    if spec.demo_only and (not farm['is_demo'] or media['origin'] != 'demo'):
         raise ValueError("Demo analiz yalnızca sentetik demo kaynağında kullanılabilir")
     camera = get_scoped(db,s.cameras,farm_id,media['camera_id'])
     end = media['metadata']['duration'] if end is None else end
     if not 0 <= start < end <= media['metadata']['duration']:
         raise ValueError("Analiz aralığı video sınırları dışında")
+    if spec.kind != 'observation':
+        from .feeding.runs import stall_context
+        context = stall_context(db, farm, media, camera, analyzer, spec, model_id)
+        return _enqueue(db, farm_id, media, analyzer, spec, start, end, context)
     time_map = db.execute(select(s.time_maps).where(s.time_maps.c.media_id==media_id,
         s.time_maps.c.version==media['current_time_version'])).mappings().first()
     geometry_valid = camera['geometry_valid'] and (camera['width'], camera['height']) == (media['metadata']['width'], media['metadata']['height'])
@@ -44,6 +50,11 @@ def create_run(db, farm_id, media_id, analyzer='unavailable-1', start=0., end=No
         clock_verified=camera['clock_verified'], barn_id=camera['barn_id'], geometry_version=camera['geometry_version'],
         geometry_valid=geometry_valid, zones=[dict(r) for r in zone_rows],
         occupancies=[dict(r) for r in occupancy]),default=str))
+    return _enqueue(db, farm_id, media, analyzer, spec, start, end, context)
+
+
+def _enqueue(db, farm_id, media, analyzer, spec, start, end, context):
+    media_id = media['id']
     canonical = dict(media=str(media_id), checksum=media['checksum'], start=start, end=end, analyzer=analyzer, context=context)
     fingerprint = hashlib.sha256(json.dumps(canonical,sort_keys=True).encode()).hexdigest()
     existing = db.execute(select(s.runs).where(s.runs.c.fingerprint==fingerprint)).mappings().first()

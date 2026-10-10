@@ -1,7 +1,7 @@
 """Analyzer registration is the extension point for the first real behavior model."""
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import Callable
+from typing import Callable, Literal
 from .domain import BehaviorAnalyzer, Origin
 from .video import UnavailableAnalyzer, DemoAnalyzer
 
@@ -37,11 +37,18 @@ class SnapshotIdentityResolver:
 @dataclass(frozen=True)
 class AnalyzerSpec:
     origin: Origin
-    factory: Callable[[dict], BehaviorAnalyzer]
+    factory: Callable[[dict], BehaviorAnalyzer] | None
     demo_only: bool = False
+    # 'observation': animal observation path; 'feeding': stall state timeline (izge.feeding);
+    # 'crops': stratified stall crops for manual labeling.
+    kind: Literal['observation', 'feeding', 'crops'] = 'observation'
 
 
 ANALYZERS = {
     'unavailable-1': AnalyzerSpec('unavailable', lambda context: UnavailableAnalyzer()),
     'demo-1': AnalyzerSpec('demo', lambda context: DemoAnalyzer(SnapshotIdentityResolver(context).at_offset), True),
+    # Frozen DINOv3 embeddings + trained classifier; the run context pins the model record.
+    'feeding-model-1': AnalyzerSpec('model', None, kind='feeding'),
+    'feeding-demo-1': AnalyzerSpec('demo', None, True, kind='feeding'),
+    'crops-1': AnalyzerSpec('unavailable', None, kind='crops'),
 }

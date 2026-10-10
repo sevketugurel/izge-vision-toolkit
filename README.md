@@ -37,12 +37,22 @@ docker compose exec api python -m izge.demo
 
 **Manuel etiket ve doğrulanmış düzeltmeler otomatik günlük süreleri değiştirmez.** Tarihli rapora girmek için kayıt saati doğrulanmış ve analiz başarıyla yayımlanmış olmalıdır. Kayıt saati düzeltmesi önceki sonuçları değiştirmez; yeni analiz oluşturun.
 
+### Bölme bazlı yemde süresi (v1)
+
+1. `config/cameras/` altında kamera config'ini doldurun (örnek: `synthetic_feeding.yaml`, koordinatlar **yer tutucu**; `placeholder: false` yapılmadan analiz reddedilir). **Kesit önizleme** sayfası kesitleri referans kare üzerinde gösterir.
+2. **Saha ayarları**nda kamerayı bu config ile oluşturun. **Video ve işler**de H.264 MP4 yükleyin; kayıt başlangıcı dosya adından (config regex) okunur, okunamazsa form alanı zorunludur.
+3. **Etiketleme örnekleri oluştur** → **Etiketleme** ekranında `1` yemde, `2` yemde değil, `3` görünmüyor, `Z` geri al, `S` atla.
+4. Eğitim (DINOv3 ağırlıkları için `HF_TOKEN` gerekir): `docker compose exec worker python -m izge.train --farm <işletme-id>`.
+5. **Yemde analizini başlat** → **Yemde süresi**: bölme zaman çizelgesi, günlük özet, CSV, kullanılan model sürümü. Eğitilmiş model yoksa sonuç üretilmez; demo sonuçları **DEMO** olarak işaretlenir. DINOv3 tabanlı modellerde panel "Built with DINOv3" ibaresini gösterir.
+
+Hız ölçümü: `uv run --extra ml python scripts/bench_feeding.py` (ayrıntı: docs/VERIFICATION.md).
+
 ## Yerel geliştirme
 
 Python 3.14, Node 22.18+, FFmpeg/ffprobe ve PostgreSQL 18 gerekir. `btree_gist` extension kurulabilmelidir.
 
 ```sh
-uv sync --frozen
+uv sync --frozen --extra ml   # ml: PyTorch + transformers (DINOv3)
 export PYTHONPATH=backend
 export DATABASE_URL=postgresql+psycopg://izge:izge-local@127.0.0.1:5432/izge
 uv run alembic upgrade head

@@ -1,8 +1,8 @@
 import React, { useEffect, useState, useRef, type FormEvent } from "react";
 import { createRoot } from "react-dom/client";
 import "./style.css";
-
-type Row = Record<string, any>;
+import { request, type Row } from "./api";
+import { FeedingPage, CropPreviewPage, LabelingPage, ConfigSelect, RecordedAtField } from "./feeding";
 const sections = [
   "İşletme özeti",
   "Saha ayarları",
@@ -10,6 +10,9 @@ const sections = [
   "Hayvan detayı",
   "Olaylar",
   "İnceleme",
+  "Yemde süresi",
+  "Kesit önizleme",
+  "Etiketleme",
 ];
 const labels: Row = {
   standing: "Ayakta",
@@ -47,29 +50,6 @@ const localDate = () =>
 const seconds = (n: number) =>
   n >= 3600 ? `${(n / 3600).toFixed(1)} sa` : `${Math.round(n)} sn`;
 const when = (s: string) => new Date(s).toLocaleString("tr-TR");
-async function request(path: string, data?: unknown, method?: string) {
-  const response = await fetch(path, {
-    method: method || (data ? "POST" : "GET"),
-    headers:
-      data instanceof FormData ? {} : { "Content-Type": "application/json" },
-    body: data
-      ? data instanceof FormData
-        ? data
-        : JSON.stringify(data)
-      : undefined,
-  });
-  if (!response.ok) {
-    const error = await response
-      .json()
-      .catch(() => ({ detail: "Sunucuya ulaşılamadı" }));
-    throw new Error(
-      typeof error.detail === "string"
-        ? error.detail
-        : "Form bilgileri geçersiz. Zorunlu alanları, tarihleri ve sayısal sınırları kontrol edin.",
-    );
-  }
-  return response.status === 204 ? null : response.json();
-}
 function App() {
   const [config, setConfig] = useState<Row>({ app_name: "İzge" }),
     [farms, setFarms] = useState<Row[]>([]),
@@ -85,12 +65,17 @@ function App() {
     [animalId, setAnimalId] = useState(""),
     [event, setEvent] = useState<Row | null>(null);
   const [animalEvents, setAnimalEvents] = useState<Row[]>([]);
+  const [uploadCamera, setUploadCamera] = useState(""),
+    [uploadName, setUploadName] = useState("");
+  const stallUpload = !!data.cameras?.find((c) => c.id === uploadCamera)
+    ?.config_key;
   const [epoch, setEpoch] = useState(0),
     [loaded, setLoaded] = useState(false);
   const generation = useRef(0);
   const base = `/api/v1/farms/${farm}`,
     selected = farms.find((f) => f.id === farm),
-    media = data.media?.find((m) => m.id === mediaId);
+    media = data.media?.find((m) => m.id === mediaId),
+    mediaCamera = data.cameras?.find((c) => c.id === media?.camera_id);
   const refresh = () => setEpoch((e) => e + 1);
   useEffect(() => {
     if (selected?.timezone)
@@ -257,7 +242,7 @@ function App() {
               className={page === i ? "active" : ""}
               onClick={() => setPage(i)}
             >
-              <span>{["◫", "⌘", "▷", "◎", "⚑", "✓"][i]}</span>
+              <span>{["◫", "⌘", "▷", "◎", "⚑", "✓", "▤", "▣", "⌨"][i]}</span>
               {title}
             </button>
           ))}
@@ -501,7 +486,11 @@ function App() {
                     <form
                       onSubmit={(e) => {
                         const f = form(e);
-                        post("cameras", f);
+                        post("cameras", {
+                          name: f.name,
+                          barn_id: f.barn_id,
+                          config_key: f.config_key || null,
+                        });
                       }}
                     >
                       <label>
@@ -515,6 +504,7 @@ function App() {
                           {options("barns")}
                         </select>
                       </label>
+                      <ConfigSelect />
                       <button>Kamera ekle</button>
                     </form>
                     <form
@@ -814,6 +804,7 @@ function App() {
                       const f = new FormData(e.currentTarget);
                       const camera = f.get("camera_id");
                       f.delete("camera_id");
+                      if (!f.get("recorded_at")) f.delete("recorded_at");
                       act(() =>
                         request(`${base}/media?camera_id=${camera}`, f),
                       );
@@ -821,7 +812,12 @@ function App() {
                   >
                     <label>
                       Kamera
-                      <select name="camera_id" required>
+                      <select
+                        name="camera_id"
+                        required
+                        value={uploadCamera}
+                        onChange={(e) => setUploadCamera(e.target.value)}
+                      >
                         <option value="">Seçin</option>
                         {options("cameras")}
                       </select>
@@ -831,10 +827,20 @@ function App() {
                       <input
                         type="file"
                         name="file"
-                        accept=".mp4,.mov,.mkv,.avi"
+                        accept={
+                          stallUpload ? ".mp4" : ".mp4,.mov,.mkv,.avi"
+                        }
                         required
+                        onChange={(e) =>
+                          setUploadName(e.target.files?.[0]?.name || "")
+                        }
                       />
                     </label>
+                    <RecordedAtField
+                      base={base}
+                      camera={data.cameras?.find((c) => c.id === uploadCamera)}
+                      filename={uploadName}
+                    />
                     <button className="primary" disabled={busy}>
                       Yükle ve doğrula
                     </button>
@@ -925,6 +931,30 @@ function App() {
                       >
                         Analizi başlat
                       </button>
+                      {mediaCamera?.config_key && (
+                        <>
+                          <button
+                            onClick={() =>
+                              post("labeling/samples", { media_id: media.id })
+                            }
+                          >
+                            Etiketleme örnekleri oluştur
+                          </button>
+                          <button
+                            onClick={() =>
+                              post("runs", {
+                                media_id: media.id,
+                                analyzer:
+                                  media.origin === "demo"
+                                    ? "feeding-demo-1"
+                                    : "feeding-model-1",
+                              })
+                            }
+                          >
+                            Yemde analizini başlat
+                          </button>
+                        </>
+                      )}
                       <button onClick={() => setPage(5)}>Etiketle →</button>
                       <a href={`${base}/media/${media.id}/file?kind=original`}>
                         Orijinali aç ↗
@@ -1325,6 +1355,13 @@ function App() {
             )}
           </>
         )}
+        {farm && page === 6 && (
+          <FeedingPage base={base} cameras={data.cameras} day={day} />
+        )}
+        {farm && page === 7 && (
+          <CropPreviewPage base={base} cameras={data.cameras} media={data.media} />
+        )}
+        {farm && page === 8 && <LabelingPage base={base} cameras={data.cameras} />}
         <footer>
           {config.app_name} · İlk sürüm · Yerel kullanım ·{" "}
           {selected?.is_demo

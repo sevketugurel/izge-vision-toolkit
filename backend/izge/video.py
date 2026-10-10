@@ -9,21 +9,8 @@ from collections import deque
 from datetime import datetime, timezone
 from pathlib import Path
 from fractions import Fraction
-from .config import MEDIA_ROOT
 from .domain import Frame, Observation
-
-class LocalStorage:
-    def __init__(self, root: Path = MEDIA_ROOT):
-        self.root = root
-        self.root.mkdir(parents=True, exist_ok=True)
-    def path(self, key: str) -> Path:
-        if not re.fullmatch(r'[a-f0-9]{32}(?:\.[a-z0-9]+)?', key):
-            raise ValueError("Geçersiz storage anahtarı")
-        path = self.root / key
-        if path.is_symlink() or path.resolve().parent != self.root.resolve():
-            raise ValueError("Geçersiz storage yolu")
-        return path
-
+from .storage import LocalStorage  # noqa: F401  (re-exported for existing imports)
 
 def run_tool(args: list[str], timeout=120) -> bytes:
     try:

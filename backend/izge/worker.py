@@ -33,7 +33,12 @@ def process(job):
             run = dict(db.execute(select(s.runs).where(s.runs.c.id==job['run_id'])).mappings().one())
             media = dict(db.execute(select(s.media).where(s.media.c.id==run['media_id'])).mappings().one())
         context = run['context']
-        analyzer = ANALYZERS[run['analyzer']].factory(context)
+        spec = ANALYZERS[run['analyzer']]
+        if spec.kind != 'observation':
+            from .feeding.pipeline import process_stall_run
+            process_stall_run(job, run, media, spec, lost)
+            return
+        analyzer = spec.factory(context)
         recorded_at = datetime.fromisoformat(context['recorded_at']) if context['recorded_at'] else None
         storage = LocalStorage()
         batch, last_sample, checkpoint = [], float('-inf'), job['checkpoint']

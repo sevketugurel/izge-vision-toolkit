@@ -1,7 +1,7 @@
 """Persistence schema. Composite references preserve the farm boundary in the database."""
 import uuid
 from sqlalchemy import (MetaData, Table, Column as C, String, Text, Integer, Float, Boolean,
-                        DateTime, ForeignKey, ForeignKeyConstraint, UniqueConstraint, CheckConstraint, func, literal_column)
+                        Date, DateTime, ForeignKey, ForeignKeyConstraint, Index, UniqueConstraint, CheckConstraint, func, literal_column)
 from sqlalchemy.dialects.postgresql import UUID, JSONB, ExcludeConstraint
 
 metadata = MetaData()
@@ -26,7 +26,8 @@ barns = scoped("barns", C("name", String(120), nullable=False))
 cameras = scoped("cameras", C("name", String(120), nullable=False), C("barn_id", UUID, nullable=False),
     C("geometry_version", Integer, nullable=False, default=1), C("width", Integer), C("height", Integer),
     C("geometry_valid", Boolean, nullable=False, default=False), C("clock_verified", Boolean, nullable=False, default=False),
-    C("secret_ref", String(120)), C("health", JSONB, nullable=False, default=dict), constraints=(ref("barn_id", "barns"),))
+    C("secret_ref", String(120)), C("health", JSONB, nullable=False, default=dict), C("config_key", String(80)),
+    constraints=(ref("barn_id", "barns"),))
 stalls = scoped("stalls", C("name", String(120), nullable=False), C("barn_id", UUID, nullable=False),
                constraints=(ref("barn_id", "barns"), UniqueConstraint("farm_id", "barn_id", "id")))
 animals = scoped("animals", C("number", String(80), nullable=False), C("name", String(120), nullable=False, default=""),
@@ -93,3 +94,37 @@ reviews = scoped("reviews", C("event_id", UUID, nullable=False), C("verdict", St
 notifications = scoped("notifications", C("event_id", UUID, nullable=False, unique=True), C("message", Text, nullable=False),
     constraints=(ref("event_id", "events"),))
 system_events = scoped("system_events", C("kind", String(80), nullable=False), C("details", JSONB, nullable=False))
+
+# Migration 0002: stall-level feeding pipeline. Identity is the stall position from camera config.
+STALL_STATES = "'yemde','yemde_degil','gorunmuyor'"
+crop_samples = scoped("crop_samples", C("media_id", UUID, nullable=False), C("camera_id", UUID, nullable=False),
+    C("run_id", UUID, nullable=False), C("stall_key", String(40), nullable=False), C("offset", Float, nullable=False),
+    C("captured_at", DateTime(timezone=True), nullable=False), C("local_hour", Integer, nullable=False),
+    C("daynight", String(6), nullable=False), C("crop_key", String(160), nullable=False),
+    C("context_key", String(160), nullable=False),
+    constraints=(ref("media_id", "media"), ref("camera_id", "cameras"), ref("run_id", "runs"),
+        UniqueConstraint("run_id", "stall_key", "offset"), CheckConstraint("daynight IN ('gunduz','gece')")))
+crop_labels = scoped("crop_labels", C("sample_id", UUID, nullable=False), C("label", String(20), nullable=False),
+    C("labeler", String(80), nullable=False), C("supersedes_id", UUID), C("origin", String(20), nullable=False, default="manual"),
+    constraints=(ref("sample_id", "crop_samples"), ref("supersedes_id", "crop_labels"),
+        CheckConstraint(f"label IN ({STALL_STATES},'skipped','retracted')")))
+feeding_models = scoped("feeding_models", C("version", String(80), nullable=False), C("backbone", String(120), nullable=False),
+    C("classifier", String(40), nullable=False), C("label_count", Integer, nullable=False),
+    C("class_counts", JSONB, nullable=False), C("metrics", JSONB, nullable=False), C("train_days", JSONB, nullable=False),
+    C("excluded_days", JSONB, nullable=False), C("storage_key", String(160), nullable=False),
+    constraints=(UniqueConstraint("farm_id", "version"),))
+feeding_segments = scoped("feeding_segments", C("run_id", UUID, nullable=False), C("camera_id", UUID, nullable=False),
+    C("stall_key", String(40), nullable=False), C("state", String(20), nullable=False),
+    C("start_offset", Float, nullable=False), C("end_offset", Float, nullable=False),
+    C("start_at", DateTime(timezone=True), nullable=False), C("end_at", DateTime(timezone=True), nullable=False),
+    C("confidence", Float), C("origin", String(20), nullable=False),
+    constraints=(ref("run_id", "runs"), ref("camera_id", "cameras"), CheckConstraint("end_offset > start_offset"),
+        CheckConstraint(f"state IN ({STALL_STATES})")))
+feeding_daily = scoped("feeding_daily", C("run_id", UUID, nullable=False), C("camera_id", UUID, nullable=False),
+    C("stall_key", String(40), nullable=False), C("day", Date, nullable=False),
+    C("feeding_seconds", Float, nullable=False), C("not_feeding_seconds", Float, nullable=False),
+    C("not_visible_seconds", Float, nullable=False), C("observed_seconds", Float, nullable=False),
+    C("bout_count", Integer, nullable=False), C("mean_confidence", Float), C("origin", String(20), nullable=False),
+    constraints=(ref("run_id", "runs"), ref("camera_id", "cameras"), UniqueConstraint("run_id", "stall_key", "day")))
+Index("feeding_segments_lookup", feeding_segments.c.farm_id, feeding_segments.c.camera_id, feeding_segments.c.start_at)
+Index("crop_labels_sample", crop_labels.c.sample_id, crop_labels.c.created_at)

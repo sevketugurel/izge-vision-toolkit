@@ -105,7 +105,9 @@ def derive_intervals(obs: list[Observation], max_gap: float = 5, transition: flo
                 visible = (a.body_visible and b.body_visible) if dim == "posture" else (a.head_visible and b.head_visible and a.feeder_visible and b.feeder_visible)
                 supported = 0 < b.offset-a.offset <= max_gap and visible and label != "unknown" and label == getattr(b, dim)
                 if dim == "activity" and label == "feeding":
-                    supported = supported and a.feed_present is True and b.feed_present is True and a.body_visible and b.body_visible
+                    # Feeding is decided only by the stall crop analyzer (izge.feeding). The former
+                    # head/feeder zone visibility rule missed animals whose head left the polygon.
+                    supported = False
                 if not supported:
                     candidate, accepted = None, None
                     continue
