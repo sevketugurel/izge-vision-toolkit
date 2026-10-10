@@ -78,7 +78,9 @@ def test_cross_farm_foreign_keys_and_media(setup,video):
     assert client.post(wrong+'/stalls',json={'name':'Wrong','barn_id':barn}).status_code==409
     asset=upload(client,base,camera,video)
     assert client.get(wrong+f"/media/{asset['id']}/file").status_code==404
-    assert client.get(base+'/media/../../etc/passwd/file').status_code==404
+    # Traversal is never served: 404 via the static mount, 405 via API routing when no build exists.
+    traversal=client.get(base+'/media/../../etc/passwd/file')
+    assert traversal.status_code in (404,405) and 'root:' not in traversal.text
     assert client.post(base+'/runs',json={'media_id':asset['id'],'analyzer':'demo-1'}).status_code==422
 
 
