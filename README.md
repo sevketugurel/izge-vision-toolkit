@@ -45,6 +45,8 @@ docker compose exec api python -m izge.demo
 4. Eğitim (DINOv3 ağırlıkları için `HF_TOKEN` gerekir): `docker compose exec worker python -m izge.train --farm <işletme-id>`.
 5. **Yemde analizini başlat** → **Yemde süresi**: bölme zaman çizelgesi, günlük özet, CSV, kullanılan model sürümü. Eğitilmiş model yoksa sonuç üretilmez; demo sonuçları **DEMO** olarak işaretlenir. DINOv3 tabanlı modellerde panel "Built with DINOv3" ibaresini gösterir.
 
+6. Altın set (BORIS aggregated events) ve değerlendirme: `python -m izge.gold import|evaluate|list`; raporlar `docs/reports/` altına yazılır. Ayrıntı: [docs/reports/README.md](docs/reports/README.md).
+
 Hız ölçümü: `uv run --extra ml python scripts/bench_feeding.py` (ayrıntı: docs/VERIFICATION.md).
 
 ## Yerel geliştirme

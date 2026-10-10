@@ -1,0 +1,17 @@
+# BORIS "aggregated events" (CSV/TSV) içe aktarma eşlemesi (V1 Karar 7).
+# Sütun adları BORIS dışa aktarımındaki başlıklarla birebir eşleşmelidir.
+columns:
+  subject: Subject          # Subject = bölme
+  behavior: Behavior        # Behavior = durum
+  start: Start (s)
+  stop: Stop (s)
+  behavior_type: Behavior type   # isteğe bağlı; POINT olaylar reddedilir
+# BORIS davranış adı → durum. Büyük/küçük harf ve baş/son boşluk önemsenmez.
+behaviors:
+  yemde: yemde
+  yemde değil: yemde_degil
+  yemde_degil: yemde_degil
+  görünmüyor: gorunmuyor
+  gorunmuyor: gorunmuyor
+# BORIS subject adı → kamera config bölme kimliği. Boş bırakılırsa subject = bölme kimliği.
+subjects: {}

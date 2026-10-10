@@ -243,3 +243,65 @@ def test_demo_feeding_is_marked_demo_and_needs_no_model():
     assert {x['state'] for x in timeline['segments']} >= {'yemde', 'yemde_degil'}
     csv = client.get(base + '/feeding/daily.csv', params={'camera_id': camera}).text
     assert 'DEMO' in csv and 'feeding-demo-1' in csv
+
+
+def label_all(client, post, base, camera, media_id):
+    """Label every crop sample of one recording from the synthetic ground truth (test data)."""
+    run = post(base + '/labeling/samples', {'media_id': media_id})
+    isolate(run['id'])
+    work()
+    with Session() as db:
+        samples = db.execute(select(s.crop_samples).where(s.crop_samples.c.run_id == uuid.UUID(run['id']))).mappings().all()
+    for x in samples:
+        post(base + '/labels', {'sample_id': str(x['id']), 'label': truth(x['stall_key'], x['offset']), 'labeler': 'test'})
+    return len(samples)
+
+
+def test_gold_set_exclusion_and_evaluation_report(env, video, monkeypatch, tmp_path):
+    from izge.feeding import boris
+    from izge.feeding.gold import import_gold, evaluation_report, write_report, gold_exclusions
+    from synthetic import boris_tsv
+    client, post, farm, base, barn, camera = env
+    gold_media = upload(client, base, camera, video).json()                       # 2026-10-10 from filename
+    train_media = upload(client, base, camera, video, name='kayit.mp4', recorded_at='2026-10-11T08:00:00').json()
+    assert label_all(client, post, base, camera, gold_media['id']) == 60
+    assert label_all(client, post, base, camera, train_media['id']) == 60
+
+    with Session.begin() as db:
+        result = import_gold(db, uuid.UUID(farm), uuid.UUID(gold_media['id']), boris_tsv(), 'sentetik.tsv',
+                             boris.load_mapping(), synthetic=True, note='test')
+    assert result['events'] == 8 and result['stalls'] == ['A', 'B']
+    with Session.begin() as db, pytest.raises(ValueError, match='zaten'):
+        import_gold(db, uuid.UUID(farm), uuid.UUID(gold_media['id']), boris_tsv(), 'again.tsv', boris.load_mapping())
+    with pytest.raises(Exception):
+        with Session.begin() as db:
+            db.execute(update(s.gold_events).where(s.gold_events.c.gold_set_id == result['id']).values(state='yemde'))
+    with Session() as db:
+        days, media = gold_exclusions(db, uuid.UUID(farm))
+    assert days == {'2026-10-10'} and media == {uuid.UUID(gold_media['id'])}
+
+    # Gold days/recordings are excluded by the training code itself, whatever the caller passes.
+    with Session.begin() as db:
+        record = train(db, uuid.UUID(farm), StubBackbone(), object_store(), excluded_days=set())
+    assert record['label_count'] == 60 and record['train_days'] == ['2026-10-11']
+    assert record['excluded_days'] == ['2026-10-10'] and record['metrics']['excluded_samples'] == 60
+
+    monkeypatch.setattr(pipeline, 'load_backbone', lambda backbone_id: StubBackbone())
+    with Session() as db, pytest.raises(ValueError, match='model analizi yok'):
+        evaluation_report(db, uuid.UUID(farm))
+    run = post(base + '/runs', {'media_id': gold_media['id'], 'analyzer': 'feeding-model-1'})
+    isolate(run['id'])
+    work()
+    with Session() as db:
+        report = evaluation_report(db, uuid.UUID(farm))
+    assert report['compared_seconds'] == 180
+    assert report['gold_sets'][0]['model_version'] == record['version']
+    # Stall A is exact up to boundary blur; B's merged 5 s gap counts as feeding in the prediction.
+    assert report['mae_minutes']['near_mid'] < .1 and report['mae_minutes']['by_mesafe']['uzak'] < .2
+    assert report['confusion']['yemde']['yemde'] >= 90
+    assert report['acceptance']['accepted'] is False and report['acceptance']['synthetic'] is True
+    md, js = write_report(report, tmp_path)
+    assert md.name == f"eval_{report['created_at'][:10]}.md" and js.exists()
+    assert 'SENTETİK ALTIN SET' in md.read_text()
+    md2, _ = write_report(report, tmp_path)
+    assert md2.name.endswith('-2.md')

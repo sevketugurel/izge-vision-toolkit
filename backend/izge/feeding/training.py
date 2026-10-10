@@ -112,12 +112,16 @@ def train(db, farm_id, backbone: Backbone, storage, excluded_days: set[str] | No
           c: float = 1.0, camera_id=None) -> dict:
     farm = db.execute(select(s.farms).where(s.farms.c.id == farm_id)).mappings().one()
     zone = ZoneInfo(farm['timezone'])
-    excluded_days = set(excluded_days or ())
+    # Gold-set days and recordings are always excluded; callers can only add more (Decision 7).
+    from .gold import gold_exclusions
+    gold_days, gold_media = gold_exclusions(db, farm_id)
+    excluded_days = set(excluded_days or ()) | gold_days
     pairs = effective_labels(db, farm_id, camera_id)
     used = [(sample, label) for sample, label in pairs
-            if sample['captured_at'].astimezone(zone).date().isoformat() not in excluded_days]
+            if sample['captured_at'].astimezone(zone).date().isoformat() not in excluded_days
+            and sample['media_id'] not in gold_media]
     if not used:
-        raise ValueError('Eğitim için etiketli kesit yok')
+        raise ValueError('Eğitim için etiketli kesit yok (altın set günleri ve kayıtları dışlandıktan sonra)')
     samples = [sample for sample, _ in used]
     labels = [label for _, label in used]
     days = [sample['captured_at'].astimezone(zone).date().isoformat() for sample in samples]
@@ -131,7 +135,8 @@ def train(db, farm_id, backbone: Backbone, storage, excluded_days: set[str] | No
     record = dict(id=model_id, farm_id=farm_id, version=f'feeding-{now:%Y%m%d-%H%M%S}-{model_id.hex[:6]}',
         backbone=backbone.id, classifier='logistic-regression-l2', label_count=len(labels),
         class_counts={state: labels.count(state) for state in STATES},
-        metrics=dict(validation=validation, c=c, trained_at=now.isoformat()),
+        metrics=dict(validation=validation, c=c, trained_at=now.isoformat(),
+                     excluded_gold_media=sorted(str(m) for m in gold_media), excluded_samples=len(pairs) - len(used)),
         train_days=sorted(set(days)), excluded_days=sorted(excluded_days), storage_key=key)
     db.execute(s.feeding_models.insert().values(**record))
     return record

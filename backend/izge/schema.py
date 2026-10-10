@@ -128,3 +128,13 @@ feeding_daily = scoped("feeding_daily", C("run_id", UUID, nullable=False), C("ca
     constraints=(ref("run_id", "runs"), ref("camera_id", "cameras"), UniqueConstraint("run_id", "stall_key", "day")))
 Index("feeding_segments_lookup", feeding_segments.c.farm_id, feeding_segments.c.camera_id, feeding_segments.c.start_at)
 Index("crop_labels_sample", crop_labels.c.sample_id, crop_labels.c.created_at)
+
+# Migration 0003: BORIS gold sets for evaluation. Immutable once imported.
+gold_sets = scoped("gold_sets", C("media_id", UUID, nullable=False), C("camera_id", UUID, nullable=False),
+    C("source_name", String(200), nullable=False), C("checksum", String(64), nullable=False),
+    C("mapping", JSONB, nullable=False), C("synthetic", Boolean, nullable=False), C("note", Text, nullable=False),
+    constraints=(ref("media_id", "media"), ref("camera_id", "cameras")))
+gold_events = scoped("gold_events", C("gold_set_id", UUID, nullable=False), C("stall_key", String(40), nullable=False),
+    C("state", String(20), nullable=False), C("start_offset", Float, nullable=False), C("end_offset", Float, nullable=False),
+    constraints=(ref("gold_set_id", "gold_sets"), CheckConstraint("end_offset > start_offset"),
+        CheckConstraint(f"state IN ({STALL_STATES})")))

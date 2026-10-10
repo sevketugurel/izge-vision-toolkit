@@ -37,3 +37,19 @@ class StubBackbone:
     def embed(self, crops):
         rows = [np.concatenate([c.reshape(-1, 3).mean(0), c.reshape(-1, 3).std(0)]) / 255 for c in crops]
         return np.array(rows, dtype=np.float32).reshape(-1, self.dim)
+
+
+BORIS_HEADER = ['Observation id', 'Observation date', 'Description', 'Media file', 'Total length', 'FPS',
+                'Subject', 'Behavior', 'Behavioral category', 'Modifiers', 'Behavior type',
+                'Start (s)', 'Stop (s)', 'Duration (s)', 'Comment start', 'Comment stop']
+BORIS_NAMES = {'yemde': 'Yemde', 'yemde_degil': 'Yemde değil', 'gorunmuyor': 'Görünmüyor'}
+
+
+def boris_tsv(truth=TRUTH, delimiter='\t') -> str:
+    """BORIS-style aggregated events export of the synthetic ground truth (test data)."""
+    rows = [delimiter.join(BORIS_HEADER)]
+    for stall, spans in truth.items():
+        for a, b, state in spans:
+            rows.append(delimiter.join(['obs1', '2026-10-10 14:30:00', '', 'SENTETIK.mp4', '90', '10', stall,
+                                        BORIS_NAMES[state], '', '', 'STATE', f'{a:.3f}', f'{b:.3f}', f'{b - a:.3f}', '', '']))
+    return '\n'.join(rows) + '\n'
