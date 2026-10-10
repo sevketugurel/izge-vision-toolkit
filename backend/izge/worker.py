@@ -11,7 +11,8 @@ from .db import Session
 from .analysis import claim, fence, heartbeat, save_batch, fail, LeaseLost
 from .config import HEARTBEAT_SECONDS, EVIDENCE_RETENTION_DAYS
 from .domain import Observation, observation_dict, derive_intervals, FeedingAccessRule
-from .video import FileVideoSource, LocalStorage, derivative
+from .video import FileVideoSource, derivative
+from .storage import object_store
 from .adapters import ANALYZERS
 from .notifications import DatabaseNotificationSink
 
@@ -40,9 +41,9 @@ def process(job):
             return
         analyzer = spec.factory(context)
         recorded_at = datetime.fromisoformat(context['recorded_at']) if context['recorded_at'] else None
-        storage = LocalStorage()
+        storage = object_store()
         batch, last_sample, checkpoint = [], float('-inf'), job['checkpoint']
-        for frame in FileVideoSource(storage.path(media['storage_key'])).frames(max(run['start_offset'],checkpoint-2)):
+        for frame in FileVideoSource(storage.local_path(media['storage_key'])).frames(max(run['start_offset'],checkpoint-2)):
             if lost.is_set():
                 raise LeaseLost()
             if frame.offset>=run['end_offset']:
@@ -75,7 +76,8 @@ def process(job):
             key = uuid.uuid4().hex+'.mp4'
             start = max(0.,event['start_offset']-context['config']['evidence_padding'])
             end = min(media['metadata']['duration'],event['end_offset']+context['config']['evidence_padding'])
-            derivative(storage.path(media['storage_key']),storage.path(key),'clip',start,end)
+            derivative(storage.local_path(media['storage_key']),storage.path(key),'clip',start,end)
+            storage.commit(key)
             clips.append((key,start,end))
         with Session.begin() as db:
             fence(db,job['id'],job['lease_token'])

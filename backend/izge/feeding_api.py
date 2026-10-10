@@ -138,7 +138,10 @@ def undo_label(farm_id: uuid.UUID, label_id: uuid.UUID, data: UndoInput, db: DBS
 @router.get(BASE + '/crops/{sample_id}/image')
 def crop_image(farm_id: uuid.UUID, sample_id: uuid.UUID, kind: Literal['crop', 'context'] = 'crop', db: DBSession = DB):
     sample = get_scoped(db, s.crop_samples, farm_id, sample_id)
-    path = object_store().path(sample['crop_key' if kind == 'crop' else 'context_key'])
+    try:
+        path = object_store().local_path(sample['crop_key' if kind == 'crop' else 'context_key'])
+    except FileNotFoundError:
+        raise LookupError('Kesit görüntüsü bulunamadı')
     if not path.exists():
         raise LookupError('Kesit görüntüsü bulunamadı')
     return FileResponse(path, media_type='image/png' if kind == 'crop' else 'image/jpeg')

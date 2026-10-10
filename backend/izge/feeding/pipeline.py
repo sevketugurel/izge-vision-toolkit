@@ -78,7 +78,7 @@ def analyze_feeding(job, run, media, spec, lost):
     ctx = run['context']
     config = CameraConfig.model_validate(ctx['camera_config'])
     storage = object_store()
-    path = storage.path(media['storage_key'])
+    path = storage.local_path(media['storage_key'])
     analyzer = build_analyzer(spec, ctx, storage)
     geoms = geometries(config, media['metadata']['width'], media['metadata']['height'])
     start = int(run['start_offset'])
@@ -177,7 +177,7 @@ def sample_crops(job, run, media, lost):
     ctx = run['context']
     config = CameraConfig.model_validate(ctx['camera_config'])
     storage = object_store()
-    path = storage.path(media['storage_key'])
+    path = storage.local_path(media['storage_key'])
     recorded_at = datetime.fromisoformat(ctx['recorded_at'])
     zone = ZoneInfo(config.timezone)
     geoms = geometries(config, media['metadata']['width'], media['metadata']['height'])

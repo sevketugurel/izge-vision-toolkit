@@ -72,6 +72,7 @@ Frontend Vite geliştirme sunucusu `/api` isteklerini port 8000'e yönlendirir. 
 ```sh
 make verify   # lint, birim, PG18 entegrasyon, frontend build, Compose yığını, Playwright e2e
 make test     # yalnız birim testleri
+make verify-deploy   # GCP betiklerinin statik doğrulaması (kaynak oluşturmaz)
 ```
 
 Ayrıntılar ve son sonuçlar: [docs/VERIFICATION.md](docs/VERIFICATION.md). Entegrasyon testleri yalnızca `compose.test.yaml` ile açılan geçici PostgreSQL 18'e karşı koşar; saha veritabanında çalıştırmayın. Suite PostgreSQL 14'ü kabul etmez.
@@ -86,4 +87,4 @@ Ayrıntılar ve son sonuçlar: [docs/VERIFICATION.md](docs/VERIFICATION.md). Ent
 - Dosya işleme ve demo sonuçları gerçek canlı alarm gecikmesinin kanıtı değildir.
 - İlk analizde uzun videonun gözlemleri türetme aşamasında belleğe alınır; büyük saha kayıtları için bellek/performans testi ve artımlı türetme gerekir.
 
-[Mimari](docs/ARCHITECTURE.md) · [Proje bağlamı](docs/CONTEXT.md) · [Yol haritası ve pilot girdileri](docs/ROADMAP.md) · [Üçüncü taraflar](docs/THIRD_PARTY_LICENSES.md)
+[GCP dağıtımı](docs/DEPLOY_GCP.md) · [Mimari](docs/ARCHITECTURE.md) · [Proje bağlamı](docs/CONTEXT.md) · [Yol haritası ve pilot girdileri](docs/ROADMAP.md) · [Üçüncü taraflar](docs/THIRD_PARTY_LICENSES.md)

@@ -21,7 +21,8 @@ from .db import session
 from .domain import validate_polygon
 from .analysis import get_scoped, create_run
 from .adapters import ANALYZERS
-from .video import LocalStorage, probe, derivative
+from .video import probe, derivative
+from .storage import object_store
 from .reporting import daily_report
 from .feeding import camera_config
 from .feeding_api import router as feeding_router
@@ -346,7 +347,7 @@ def upload(farm_id: uuid.UUID,camera_id: uuid.UUID,file: UploadFile=File(...),re
             raise ValueError('Kayıt başlangıcı dosya adından okunamadı; yükleme formunda kayıt başlangıcını girin')
     elif suffix not in ('.mp4','.mov','.mkv','.avi'):
         raise ValueError('MP4, MOV, MKV veya AVI yükleyin')
-    storage, key = LocalStorage(), uuid.uuid4().hex+suffix
+    storage, key = object_store(), uuid.uuid4().hex+suffix
     path = storage.path(key)
     digest, size, created = hashlib.sha256(), 0, []
     try:
@@ -377,6 +378,8 @@ def upload(farm_id: uuid.UUID,camera_id: uuid.UUID,file: UploadFile=File(...),re
             derivative(path,child,kind)
             db.execute(s.evidence.insert().values(farm_id=farm_id,media_id=row['id'],kind=kind,storage_key=child_key,
                 start_offset=0,end_offset=meta['duration']))
+            storage.commit(child_key)
+        storage.commit(key)
         db.commit()
         return public(row)
     except Exception:
@@ -396,7 +399,10 @@ def media_file(farm_id: uuid.UUID,media_id: uuid.UUID,kind: Literal['original','
         if not child:
             raise LookupError('Önizleme bulunamadı')
         key = child['storage_key']
-    path = LocalStorage().path(key)
+    try:
+        path = object_store().local_path(key)
+    except FileNotFoundError:
+        raise LookupError('Dosya bulunamadı')
     if not path.exists():
         raise LookupError('Dosya bulunamadı')
     return FileResponse(path,media_type='image/jpeg' if kind=='thumbnail' else 'video/mp4' if kind=='preview' else None)
@@ -404,7 +410,10 @@ def media_file(farm_id: uuid.UUID,media_id: uuid.UUID,kind: Literal['original','
 @app.get(BASE+'/evidence/{evidence_id}/file')
 def evidence_file(farm_id: uuid.UUID,evidence_id: uuid.UUID,db: DBSession=DB):
     row = get_scoped(db,s.evidence,farm_id,evidence_id)
-    path = LocalStorage().path(row['storage_key'])
+    try:
+        path = object_store().local_path(row['storage_key'])
+    except FileNotFoundError:
+        raise LookupError('Kanıt saklama süresi dolmuş')
     if not path.exists():
         raise LookupError('Kanıt saklama süresi dolmuş')
     return FileResponse(path,media_type='video/mp4')

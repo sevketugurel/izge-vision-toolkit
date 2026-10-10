@@ -18,3 +18,9 @@ data/
 *.pt
 *.pth
 *.onnx
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+.terraform.lock.hcl

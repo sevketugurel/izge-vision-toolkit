@@ -4,7 +4,9 @@ Flat keys (`<32 hex>[.ext]`) hold uploaded originals and derivatives. Namespaced
 (`probs/…`, `crops/…`, `embeddings/…`, `models/…`) hold pipeline artifacts. Local storage
 maps keys onto MEDIA_ROOT; a GCS backend implements the same methods.
 """
+import os
 import re
+from functools import lru_cache
 from pathlib import Path
 from typing import Protocol
 from .config import MEDIA_ROOT
@@ -18,6 +20,9 @@ def valid_key(key: str) -> bool:
 
 
 class ObjectStore(Protocol):
+    def path(self, key: str) -> Path: ...            # local working path (write here, then commit)
+    def local_path(self, key: str) -> Path: ...      # readable local copy of an existing object
+    def commit(self, key: str) -> None: ...          # publish a file written at path(key)
     def put_bytes(self, key: str, data: bytes) -> None: ...
     def get_bytes(self, key: str) -> bytes: ...
     def exists(self, key: str) -> bool: ...
@@ -39,6 +44,12 @@ class LocalStorage:
                 path.resolve().parent != (resolved_root / key).parent.resolve():
             raise ValueError("Geçersiz storage yolu")
         return path
+
+    def local_path(self, key: str) -> Path:
+        return self.path(key)
+
+    def commit(self, key: str) -> None:
+        """Local files are already in place."""
 
     def put_bytes(self, key: str, data: bytes) -> None:
         path = self.path(key)
@@ -63,5 +74,71 @@ class LocalStorage:
         return sorted(str(p.relative_to(self.root)) for p in base.rglob('*') if p.is_file() and not p.name.endswith('.part'))
 
 
+class GCSStorage(LocalStorage):
+    """Objects live in a GCS bucket; MEDIA_ROOT is only a local working cache.
+
+    Codecs and file responses need local files: local_path() downloads on first use and commit()
+    uploads a file written at path(). Requires the `gcp` extra (google-cloud-storage)."""
+    def __init__(self, bucket: str, prefix: str = '', root: Path = MEDIA_ROOT, client=None):
+        super().__init__(root)
+        if client is None:
+            from google.cloud import storage
+            client = storage.Client()
+        self.bucket = client.bucket(bucket)
+        self.prefix = prefix.strip('/') + '/' if prefix.strip('/') else ''
+
+    def _blob(self, key: str):
+        if not valid_key(key):
+            raise ValueError("Geçersiz storage anahtarı")
+        return self.bucket.blob(self.prefix + key)
+
+    def local_path(self, key: str) -> Path:
+        path = self.path(key)
+        if not path.exists():
+            path.parent.mkdir(parents=True, exist_ok=True)
+            temp = path.with_name(path.name + '.part')
+            self._blob(key).download_to_filename(str(temp))
+            temp.replace(path)
+        return path
+
+    def commit(self, key: str) -> None:
+        self._blob(key).upload_from_filename(str(self.path(key)))
+
+    def put_bytes(self, key: str, data: bytes) -> None:
+        self._blob(key).upload_from_string(data)
+        self.path(key).unlink(missing_ok=True)
+
+    def get_bytes(self, key: str) -> bytes:
+        return self._blob(key).download_as_bytes()
+
+    def exists(self, key: str) -> bool:
+        return self._blob(key).exists()
+
+    def delete(self, key: str) -> None:
+        blob = self._blob(key)
+        if blob.exists():
+            blob.delete()
+        self.path(key).unlink(missing_ok=True)
+
+    def list(self, prefix: str) -> list[str]:
+        full = self.prefix + prefix
+        return sorted(b.name[len(self.prefix):] for b in self.bucket.list_blobs(prefix=full)
+                      if valid_key(b.name[len(self.prefix):]))
+
+
+@lru_cache(maxsize=1)
+def _gcs(bucket: str, prefix: str) -> GCSStorage:
+    return GCSStorage(bucket, prefix)
+
+
 def object_store() -> LocalStorage:
-    return LocalStorage()
+    """IZGE_STORAGE=local (default) or gcs (IZGE_GCS_BUCKET, optional IZGE_GCS_PREFIX)."""
+    kind = os.getenv('IZGE_STORAGE', 'local')
+    if kind == 'local':
+        return LocalStorage()
+    if kind == 'gcs':
+        bucket = os.getenv('IZGE_GCS_BUCKET')
+        if not bucket:
+            raise RuntimeError('IZGE_STORAGE=gcs için IZGE_GCS_BUCKET gerekli')
+        return _gcs(bucket, os.getenv('IZGE_GCS_PREFIX', ''))
+    raise RuntimeError(f'Bilinmeyen IZGE_STORAGE: {kind}')

@@ -61,18 +61,36 @@ def upload(client, base, camera, path, name=None, **form):
 
 
 def work():
-    """Run queued jobs of this test only (others are pushed into the future first)."""
+    """Run the job of the run passed to isolate() (other queued jobs are held back)."""
     with Session.begin() as db:
         job = claim(db)
     assert job, 'no job claimed'
-    process(job)
+    try:
+        process(job)
+    finally:
+        release()
     return job
 
 
+HELD: dict = {}
+
+
 def isolate(run_id):
+    """Hold back other queued jobs until the next work(); their availability is then restored."""
     with Session.begin() as db:
-        db.execute(update(s.jobs).where(s.jobs.c.status == 'queued', s.jobs.c.run_id != uuid.UUID(str(run_id)))
+        rows = db.execute(select(s.jobs.c.id, s.jobs.c.available_at).where(s.jobs.c.status == 'queued',
+                          s.jobs.c.run_id != uuid.UUID(str(run_id)))).all()
+        HELD.update({r.id: r.available_at for r in rows if r.id not in HELD})
+        db.execute(update(s.jobs).where(s.jobs.c.id.in_([r.id for r in rows]))
                    .values(available_at=datetime.now(timezone.utc) + timedelta(days=1)))
+
+
+def release():
+    with Session.begin() as db:
+        for job_id, available_at in HELD.items():
+            db.execute(update(s.jobs).where(s.jobs.c.id == job_id, s.jobs.c.status == 'queued')
+                       .values(available_at=available_at))
+    HELD.clear()
 
 
 def test_camera_config_api_and_validation(env):
@@ -305,3 +323,18 @@ def test_gold_set_exclusion_and_evaluation_report(env, video, monkeypatch, tmp_p
     assert 'SENTETİK ALTIN SET' in md.read_text()
     md2, _ = write_report(report, tmp_path)
     assert md2.name.endswith('-2.md')
+
+
+def test_gpu_controller_counts_available_and_running_jobs(env, video):
+    from izge.gpu_controller import pending_jobs
+    client, post, farm, base, barn, camera = env
+    media = upload(client, base, camera, video).json()
+    run = post(base + '/labeling/samples', {'media_id': media['id']})
+    isolate(run['id'])   # other queued jobs are held back and must not count
+    with Session() as db:
+        assert pending_jobs(db) == 1
+    work()
+    isolate(run['id'])
+    with Session() as db:
+        assert pending_jobs(db) == 0
+    release()

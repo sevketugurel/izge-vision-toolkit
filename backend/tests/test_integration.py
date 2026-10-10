@@ -166,6 +166,14 @@ def test_demo_worker_events_reviews_and_single_notification(setup):
     from izge.demo import seed
     from izge.reporting import daily_report
     farm_id=seed()
+    # The demo farm may already exist (other suites); make its two observation demo jobs claimable.
+    with Session.begin() as db:
+        demo_runs=select(s.runs.c.id).where(s.runs.c.farm_id==farm_id,s.runs.c.analyzer=='demo-1')
+        db.execute(update(s.jobs).where(s.jobs.c.status=='queued',s.jobs.c.run_id.in_(demo_runs))
+                   .values(available_at=datetime.now(timezone.utc)-timedelta(seconds=1)))
+        # Hold back the stall feeding demo job (same farm, same created_at) so only demo-1 runs here.
+        db.execute(update(s.jobs).where(s.jobs.c.status=='queued',s.jobs.c.farm_id==farm_id,
+                   s.jobs.c.run_id.not_in(demo_runs)).values(available_at=datetime.now(timezone.utc)+timedelta(days=1)))
     client=TestClient(app)
     base=f'/api/v1/farms/{farm_id}'
     for _ in range(2):

@@ -4,13 +4,14 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import select
 from .db import Session
 from . import schema as s
-from .video import LocalStorage, run_tool, probe, derivative
+from .video import run_tool, probe, derivative
+from .storage import object_store
 from .analysis import create_run
 import hashlib
 
 
 def seed():
-    storage = LocalStorage()
+    storage = object_store()
     with Session.begin() as db:
         # Serialize seed calls; this is a local administrative command.
         from sqlalchemy import text
@@ -57,7 +58,9 @@ def seed():
             for kind,ext in (('thumbnail','.jpg'),('preview','.mp4')):
                 child = uuid.uuid4().hex+ext
                 derivative(path,storage.path(child),kind)
+                storage.commit(child)
                 db.execute(s.evidence.insert().values(farm_id=farm_id,media_id=media_id,kind=kind,storage_key=child,start_offset=0,end_offset=30))
+            storage.commit(key)
             create_run(db,farm_id,media_id,'demo-1')
         feeding_demo(db, storage, farm_id, barn_id)
         print(f'Demo oluşturuldu: {farm_id}. İşleri worker işleyecek.')
@@ -85,8 +88,10 @@ def feeding_demo(db, storage, farm_id, barn_id, minutes=10):
     for kind, ext in (('thumbnail', '.jpg'), ('preview', '.mp4')):
         child = uuid.uuid4().hex + ext
         derivative(path, storage.path(child), kind)
+        storage.commit(child)
         db.execute(s.evidence.insert().values(farm_id=farm_id, media_id=media_id, kind=kind, storage_key=child,
                                               start_offset=0, end_offset=minutes * 60))
+    storage.commit(key)
     create_run(db, farm_id, media_id, 'feeding-demo-1')
 
 

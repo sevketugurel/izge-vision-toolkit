@@ -12,11 +12,24 @@ dependencies = [
 [project.optional-dependencies]
 # Frozen DINOv3 backbone. Linux resolves the CPU-only PyTorch build; macOS wheels support MPS.
 ml = ["torch==2.14.1", "transformers==5.19.0"]
+# GPU worker image (linux/amd64): CUDA 12.6 PyTorch build; needs NVIDIA driver >= 560 on the host.
+gpu = ["torch==2.14.1", "transformers==5.19.0"]
+# Google Cloud Storage backend (IZGE_STORAGE=gcs).
+gcp = ["google-cloud-storage==3.17.0"]
+[tool.uv]
+conflicts = [[{ extra = "ml" }, { extra = "gpu" }]]
 [tool.uv.sources]
-torch = [{ index = "pytorch-cpu", marker = "sys_platform == 'linux'" }]
+torch = [
+  { index = "pytorch-cpu", extra = "ml", marker = "sys_platform == 'linux'" },
+  { index = "pytorch-cu126", extra = "gpu" },
+]
 [[tool.uv.index]]
 name = "pytorch-cpu"
 url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+[[tool.uv.index]]
+name = "pytorch-cu126"
+url = "https://download.pytorch.org/whl/cu126"
 explicit = true
 [dependency-groups]
 dev = ["pytest==8.4.2", "httpx==0.28.1", "ruff==0.14.0"]

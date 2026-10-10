@@ -21,7 +21,7 @@ COPY --chown=izge:izge pyproject.toml uv.lock ./
 USER izge
 # CPU PyTorch (linux index) + transformers for the frozen DINOv3 backbone; weights are fetched at
 # runtime into HF_HOME with HF_TOKEN and never baked into the image.
-RUN uv sync --frozen --no-dev --extra ml --no-cache
+RUN uv sync --frozen --no-dev --extra ml --extra gcp --no-cache
 COPY --chown=izge:izge backend ./backend
 COPY --chown=izge:izge alembic.ini ./
 COPY --chown=izge:izge config ./config
