@@ -9,7 +9,7 @@ from collections import deque
 from datetime import datetime, timezone
 from pathlib import Path
 from fractions import Fraction
-from .domain import Frame, Observation
+from .domain import Frame, Observation, SourceGap
 from .storage import LocalStorage  # noqa: F401  (re-exported for existing imports)
 
 def run_tool(args: list[str], timeout=120) -> bytes:
@@ -54,21 +54,83 @@ def derivative(source: Path, dest: Path, kind: str, start=0., end: float | None=
 class FileVideoSource:
     def __init__(self, path: Path):
         self.path = path
-    def frames(self, start=0):
+    def metadata(self) -> dict:
+        """Native stream and container times, without inferring duration from frame rate."""
+        import av
+        with av.open(str(self.path), options={'protocol_whitelist': 'file,pipe'}) as container:
+            stream = container.streams.video[0]
+            base = Fraction(stream.time_base)
+            duration = stream.duration
+            return {
+                'codec': stream.codec_context.name,
+                'width': stream.width, 'height': stream.height,
+                'time_base': {'numerator': base.numerator, 'denominator': base.denominator},
+                'stream_start_pts': stream.start_time,
+                'normalization_origin_pts': stream.start_time or 0,
+                'video_stream_duration_pts': duration,
+                'video_stream_duration_s': float(duration * base) if duration is not None else None,
+                'video_stream_end_offset_s': (
+                    float(duration * base) if duration is not None and stream.start_time is not None else None),
+                'container_duration_s': (
+                    container.duration / av.time_base if container.duration is not None else None),
+                'reported_average_rate': str(stream.average_rate) if stream.average_rate else None,
+                'reported_base_rate': str(stream.base_rate) if stream.base_rate else None,
+                'declared_frame_count': stream.frames or None,
+                'codec_library_versions': av.library_versions,
+            }
+
+    def read_events(self, start=0):
+        """Sequential diagnostic stream; invalid source evidence is explicit.
+
+        Non-monotonic timestamps remain raw here; the diagnostic consumer rejects them.
+        frames() keeps the legacy frame-only interface and raises on terminal decode errors.
+        """
+        import av
+        try:
+            yield from self._read_events(start)
+        except (av.error.FFmpegError, OSError, ValueError):
+            yield SourceGap('decode_error')
+
+    def _read_events(self, start=0):
         import av
         with av.open(str(self.path), options={'protocol_whitelist':'file,pipe'}) as container:
             stream = container.streams.video[0]
             stream.thread_count = 2
             origin = stream.start_time or 0
+            stream_base = Fraction(stream.time_base)
             if start > 0:
                 container.seek(max(origin, int(start/stream.time_base)+origin), stream=stream, backward=True)
-            for frame in container.decode(stream):
-                if frame.pts is None:
-                    continue
-                offset = float((frame.pts-origin)*frame.time_base)
-                if offset < start:
-                    continue
-                yield Frame(frame.pts, Fraction(frame.time_base), offset, frame.width, frame.height, frame)
+            last = None
+            try:
+                for index, frame in enumerate(container.decode(stream)):
+                    base = Fraction(frame.time_base) if frame.time_base else None
+                    reason = ('missing_pts' if frame.pts is None else
+                              'invalid_time_base' if base is None or base <= 0 else
+                              'corrupt_frame' if frame.is_corrupt else None)
+                    if reason:
+                        yield SourceGap(reason, before_pts=last.pts if last else None,
+                                        time_base=last.time_base if last else None,
+                                        start_offset=last.offset if last else None,
+                                        decoded_index=index, pts=frame.pts, pts_time_base=base)
+                        continue
+                    offset = float(frame.pts * base - origin * stream_base)
+                    if start > 0 and offset < start:
+                        continue
+                    last = Frame(frame.pts, base, offset, frame.width, frame.height, frame,
+                                 decoded_index=index)
+                    yield last
+            except (av.error.FFmpegError, OSError, ValueError):
+                yield SourceGap('decode_error', before_pts=last.pts if last else None,
+                                time_base=last.time_base if last else None,
+                                start_offset=last.offset if last else None)
+
+    def frames(self, start=0):
+        for event in self.read_events(start):
+            if isinstance(event, Frame):
+                if event.offset >= start:
+                    yield event
+            elif event.reason == 'decode_error':
+                raise ValueError('Video kareleri tamamen çözülemedi')
 
 
 class UnavailableAnalyzer:

@@ -17,6 +17,26 @@ class Frame:
     image: Any
     recorded_at: datetime | None = None
     received_at: datetime | None = None
+    decoded_index: int | None = None
+
+
+@dataclass(frozen=True)
+class SourceGap:
+    """Source evidence failure, never a planned sampling skip or a behavior observation.
+
+    Bounds bracket a failure when available; they do not locate the missing frame exactly.
+    A missing right boundary stays unknown until a later valid timestamp is observed.
+    """
+    reason: str
+    before_pts: int | None = None
+    after_pts: int | None = None
+    time_base: Fraction | None = None
+    start_offset: float | None = None
+    end_offset: float | None = None
+    bounds_uncertain: bool = True
+    decoded_index: int | None = None
+    pts: int | None = None
+    pts_time_base: Fraction | None = None
 
 @dataclass(frozen=True)
 class Observation:

@@ -1,0 +1,20 @@
+# Modelsiz ön kontrol. Gerçek koordinatlar 2. aşamada insan tarafından doğrulanacak.
+schema_version: behavior-config-1
+camera_id: reference_barn
+reference_width: 2560
+reference_height: 1440
+placeholder: true
+geometry_verification: null
+# Animal ROI kayıtları side: left veya right taşımalı. Koordinatlar orijinal pikseldir.
+animal_rois: []
+feeder_rois: []
+stalls: []
+sampling:
+  detection_hz: 5
+  posture_hz: 1
+  # Eşik aşımı yalnız PTS süreksizliği adaydır; VFR'de kayıp kare kanıtı değildir.
+  source_gap_threshold_s: 1
+thresholds:
+  posture_support_s: 2
+  transition_support_s: 3
+  max_gap_factor: 1.5
