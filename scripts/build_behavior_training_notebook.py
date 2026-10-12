@@ -1,0 +1,148 @@
+#!/usr/bin/env python3
+"""Build/validate a Colab companion; no code cell is executed by this command."""
+import ast
+from pathlib import Path
+
+import nbformat
+
+
+def main():
+    md, code = nbformat.v4.new_markdown_cell, nbformat.v4.new_code_cell
+    notebook = nbformat.v4.new_notebook(cells=[
+        md('# İzge — RF-DETR-Seg Small insan etiketli eğitim hazırlığı\n\n'
+           'Hazır, **eğitim çalıştırılmadı**. Bu notebook Mac çıkarım ortamından ayrı Linux x86_64 / '
+           'Python 3.12.11 / CUDA 12.6 kilidini kullanır. Ham uzun videoları yüklemez. '
+           'Mevcut pilot etiketsizdir; gerçek etiket/split kabulünden önce eğitim hücreleri kapalı kalır.'),
+        md('## Amaç\n\nİnsan kutu/instance mask etiketleriyle Seg Small uyarlaması. Duruş/feeding sınıflandırıcısı '
+           'ayrı iştir; bu notebook bunları eğitmez. Model önerileri insan etiketi değildir. '
+           '[Resmî eğitim API](https://rfdetr.roboflow.com/learn/train/), '
+           '[Colab koşulları](https://research.google.com/colaboratory/faq.html).'),
+        md('## Kurulum\n\nColab menüsünden GPU runtime seçin. Önce kullanıcı hesabındaki hedefi belirleyin. '
+           'Yerel `training-kit.zip` ve **sonradan insan etiketleriyle export edilmiş** COCO zip dosyasını '
+           'Colab dosya panelinden kendiniz yükleyin. Notebook paylaşılırsa hücre çıktıları da paylaşılabilir; '
+           'token/anahtar yazmayın. SSH veya uzak worker kullanılmaz.'),
+        code('from pathlib import Path\n'
+             'KIT_ZIP = Path("/content/training-kit-final.zip")\n'
+             'KIT_SHA256 = ""  # yerel kit manifestindeki SHA256\n'
+             'DATASET_ZIP = Path("/content/human-coco.zip")\n'
+             'DATASET_SHA256 = ""  # kontrollü export paketinin SHA256\n'
+             'KIT_DIR = Path("/content/izge-training-kit")\n'
+             'DATASET_DIR = Path("/content/izge-human-coco")\n'
+             'INSTALL_ENVIRONMENT = False\n'
+             'MOUNT_DRIVE = False\n'
+             'RUN_SMOKE = False\n'
+             'RUN_TRAINING = False\n'
+             'RELEASE_LOCKED_TEST = False\n'
+             'BATCH_SIZE = 1\nGRAD_ACCUM_STEPS = 4\nEPOCHS = 20\n'
+             'OUTPUT_BASE = Path("/content/drive/MyDrive/izge-training")\n'
+             'RESUME_CHECKPOINT = None  # güvenilir tam checkpoint_{epoch}.ckpt; best .pth değil'),
+        md('### 1. Paket checksum ve güvenli açma\n\nYalnız seçilmiş etiketli görüntüler ve köken manifestleri taşınır. '
+           'Kod kitinde video, ağırlık ve secret bulunmaz. Dolu hedefler ezilmez.'),
+        code('import hashlib, json, zipfile\n'
+             'def digest(path):\n'
+             '    h = hashlib.sha256()\n'
+             '    with path.open("rb") as f:\n'
+             '        for block in iter(lambda: f.read(1024*1024), b""): h.update(block)\n'
+             '    return h.hexdigest()\n'
+             'def extract_checked(archive, expected, destination):\n'
+             '    if not expected or digest(archive) != expected: raise ValueError("Paket checksum eşleşmiyor")\n'
+             '    if destination.exists(): raise ValueError("Yeni/boş hedef seçin; önceki veri ezilmez")\n'
+             '    with zipfile.ZipFile(archive) as z:\n'
+             '        entries = z.infolist()\n'
+             '        if len(entries) > 50000 or sum(i.file_size for i in entries) > 20*1024**3: raise ValueError("Paket bütçesi aşıldı")\n'
+             '        for i in entries:\n'
+             '            path = (destination/i.filename).resolve()\n'
+             '            if not path.is_relative_to(destination.resolve()) or ((i.external_attr >> 16) & 0o170000) == 0o120000:\n'
+             '                raise ValueError("Güvensiz paket yolu")\n'
+             '        z.extractall(destination)\n'
+             'extract_checked(KIT_ZIP, KIT_SHA256, KIT_DIR)\n'
+             'extract_checked(DATASET_ZIP, DATASET_SHA256, DATASET_DIR)\n'
+             'proof = json.loads((DATASET_DIR/"dataset_manifest.json").read_text())\n'
+             'if proof.get("human_reviewed") is not True or proof.get("split_verified") is not True or proof.get("task") != "segmentation":\n'
+             '    raise ValueError("İnsan instance mask etiketleri ve bağımsız split kabulü olmadan eğitim kapalı")'),
+        md('### 2. Ayrı kilitli Linux ortamı\n\nAna Colab Python paketleri üzerine model ortamı kurulmaz; ayrı uv venv kullanılır. '
+           'Kilit Python 3.12 ve Linux x86_64 içindir. CPU/MPS çıkarım lock’u eğitim lock’u yerine kullanılmaz. '
+           'Supervision/OpenCV/Roboflow servis istemcisi bu yerel COCO/torchvision eğitim yolunda dışlanmıştır; '
+           'log/grid/servis özellikleri açılmamalı. Kurulum birkaç GB CUDA wheel indirebilir.'),
+        code('import subprocess, sys, platform\n'
+             'PROJECT = KIT_DIR/"experiments/rfdetr_training"\n'
+             'PYTHON = PROJECT/".venv/bin/python"\n'
+             'def run(args): subprocess.run([str(a) for a in args], check=True)\n'
+             'if INSTALL_ENVIRONMENT:\n'
+             '    if platform.system() != "Linux" or platform.machine() != "x86_64": raise RuntimeError("Linux x86_64 gerekli")\n'
+             '    run([sys.executable,"-m","pip","install","uv==0.8.4"])\n'
+             '    run(["uv","sync","--locked","--project",PROJECT,"--python","3.12.11"])\n'
+             'else:\n'
+             '    print("Kurulum çalıştırılmadı; INSTALL_ENVIRONMENT=False")'),
+        md('## Adımlar\n\n### 3. İnsan etiketleri, split ve gerçek loader/GPU kontrolü\n\n'
+           'COCO cow category_id=1, `dataset_file="roboflow"` yükleyicisinde label=0 olur; '
+           'önceki COCO-pretrained modelin cow=21 değeriyle karıştırmayın. Aynı oturum/türev/gün farklı split’e geçemez. '
+           'GPU tipi/belleği yalnız runtime’da öğrenilir; batch=1’in sığacağı henüz ölçülmedi.'),
+        code('if PYTHON.exists():\n'
+             '    run([PYTHON,KIT_DIR/"scripts/export_behavior_annotations.py","--package",DATASET_DIR,"--validate-export","--task","segmentation"])\n'
+             '    run([PYTHON,PROJECT/"train.py","--check-environment","--report","/content/training-environment.json"])\n'
+             '    gpu_probe = \'import torch, json; print(json.dumps({"cuda": torch.cuda.is_available(), "name": torch.cuda.get_device_name(0) if torch.cuda.is_available() else None, "vram_bytes": torch.cuda.get_device_properties(0).total_memory if torch.cuda.is_available() else None}))\'\n'
+             '    run([PYTHON,"-c",gpu_probe])\n'
+             'else:\n'
+             '    print("Ayrı ortam henüz kurulmadı")'),
+        md('### 4. Kalıcı checkpoint hedefi ve resmî ağırlık\n\nDrive mount yalnız seçtiğiniz hesap/klasör için yapılır. '
+           'Eğitim çıktısı doğrudan kalıcı klasöre yazılır; her epoch tam `.ckpt` saklanır. '
+           'Kesinti sonrası yeniden aynı dataset checksum/kilit ile açıp tam checkpoint’i `resume` olarak seçin. '
+           'Ağırlık checksum’ı sabittir; indirme eğitim anlamına gelmez.'),
+        code('if MOUNT_DRIVE:\n'
+             '    from google.colab import drive\n'
+             '    drive.mount("/content/drive")\n'
+             'WEIGHTS = KIT_DIR/"models/rfdetr/rf-detr-seg-small.pt"\n'
+             'if PYTHON.exists() and (RUN_SMOKE or RUN_TRAINING):\n'
+             '    if not MOUNT_DRIVE or not OUTPUT_BASE.parent.exists(): raise ValueError("Kalıcı çıktı hedefini seçin")\n'
+             '    run([PYTHON,KIT_DIR/"scripts/fetch_behavior_model.py","--output",WEIGHTS])'),
+        md('### 5. İnsan etiketleri hazırsa bir epoch smoke\n\nBu hücre bugün çalıştırılmadı. '
+           'Yükleyici/loss/backward/validation/checkpoint ve CUDA peak bellek ölçülür. OOM olursa durun; '
+           'micro-batch’i azaltın, accumulation’ı açık tutun. Batch=1 de sığmıyorsa çözünürlük/model veya cihaz '
+           'kararını ayrıca değerlendirin; otomatik başarı/fallback yok.'),
+        code('BASE_ARGS = [PYTHON,PROJECT/"train.py","--allow-training","--dataset",DATASET_DIR,"--weights",WEIGHTS,\n'
+             '             "--batch-size",BATCH_SIZE,"--grad-accum-steps",GRAD_ACCUM_STEPS]\n'
+             'if RUN_SMOKE:\n'
+             '    run([*BASE_ARGS,"--smoke","--output-dir",OUTPUT_BASE/"smoke-unique-run"])\n'
+             'else: print("Smoke eğitim çalıştırılmadı")'),
+        md('### 6. Eğitim ve resume\n\nValidation model/erken durdurma için kullanılır; test kapalıdır. '
+           'DINOv3 erişimi veya duruş eğitimi bu model yerine sessizce eklenmez.'),
+        code('if RUN_TRAINING:\n'
+             '    args = [*BASE_ARGS,"--epochs",EPOCHS,"--output-dir",OUTPUT_BASE/"train-unique-run"]\n'
+             '    if RESUME_CHECKPOINT: args += ["--resume",RESUME_CHECKPOINT]\n'
+             '    if RELEASE_LOCKED_TEST: args += ["--evaluate-test"]\n'
+             '    run(args)\n'
+             'else: print("Gerçek eğitim çalıştırılmadı; RUN_TRAINING=False")'),
+        md('## Kontroller\n\n### 7. Metrikler ve artifact export\n\n`run_report.json`, CSV logları, '
+           '`training_config.json`, tam `.ckpt` ve seçilen `.pth` dosyalarını dataset/model/ortam manifestleriyle '
+           'birlikte saklayın. `val` metrikleri saha/test başarısı değildir. Testi yalnız kilitli protokolün son '
+           'değerlendirmesinde açın; test sonucu eşik ayarlamak için kullanılmaz.'),
+        code('import shutil\n'
+             'if RUN_SMOKE or RUN_TRAINING:\n'
+             '    for folder in OUTPUT_BASE.iterdir():\n'
+             '        if folder.is_dir():\n'
+             '            files = {str(p.relative_to(folder)):digest(p) for p in folder.rglob("*") if p.is_file()}\n'
+             '            (folder/"artifact_checksums.json").write_text(json.dumps(files,indent=2))\n'
+             '            shutil.make_archive("/content/"+folder.name+"-artifacts","zip",folder)\n'
+             '    print("Zip dosyalarını Colab dosya panelinden indirin; kalıcı checkpoint klasörünü koruyun")'),
+        md('## Sonraki adımlar\n\nNotebook JSON/AST ve yerel Linux import/config/loader kontrolü ayrı kayıtlıdır. '
+           '**Bu notebook Colab’da top-to-bottom çalıştırılmadı; hesap, GPU ve gerçek etiketli bağımsız split eksik.** '
+           'Ücretsiz GPU/süre garantili değildir. Eğitim bitince Runtime → Disconnect and delete runtime; '
+           'checkpoint/paket SHA256 kaydını koruyun. Colab dışı Linux/CUDA tek-GPU seçenekleri '
+           '`docs/TRAINING_COMPUTE_PLAN.md` içinde.'),
+    ], metadata={'kernelspec': {'display_name': 'Python 3', 'language': 'python', 'name': 'python3'},
+                 'language_info': {'name':'python','version':'3.12.11'},
+                 'izge_validation': {'status':'static_only', 'training_executed':False}})
+    for cell in notebook.cells:
+        if cell.cell_type == 'code':
+            ast.parse(cell.source)
+    nbformat.validate(notebook)
+    destination = Path('experiments/rfdetr_training/colab_seg_small.ipynb')
+    if destination.exists():
+        raise ValueError('Notebook exists; do not silently overwrite')
+    nbformat.write(notebook, destination)
+    print(f'{destination}: nbformat/AST passed; no cell/model/training executed')
+
+
+if __name__ == '__main__':
+    main()

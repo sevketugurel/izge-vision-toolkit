@@ -1,0 +1,25 @@
+[project]
+name = "izge-rfdetr-seg-training"
+version = "0.1.0"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+  "rfdetr[train]==1.11.2", "torch==2.14.1", "torchvision==0.29.1",
+  "transformers==5.19.0", "pytorch-lightning==2.6.6", "torchmetrics==1.8.2",
+  "numpy==2.5.4", "scipy==1.18.1", "pillow==12.3.0", "pycocotools==2.0.11",
+  "nbformat==5.10.4",
+]
+
+[tool.uv]
+package = false
+environments = ["sys_platform == 'linux' and platform_machine == 'x86_64'"]
+# Local COCO + torchvision augmentation, no dataset service or Supervision/codec wrapper.
+override-dependencies = ["supervision; sys_platform == 'win32'", "roboflow; sys_platform == 'win32'"]
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu126" }
+torchvision = { index = "pytorch-cu126" }
+
+[[tool.uv.index]]
+name = "pytorch-cu126"
+url = "https://download.pytorch.org/whl/cu126"
+explicit = true

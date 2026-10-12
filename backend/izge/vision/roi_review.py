@@ -11,6 +11,28 @@ from .preflight import _font, _label, checksum
 DRAFT_LABEL = 'TASLAK — İNSAN DOĞRULAMASI YOK'
 
 
+def render_draft(image, config, pts: int, offset: float):
+    if not config.placeholder or config.geometry_verification is not None:
+        raise ValueError('Taslak çizim doğrulama kaydı oluşturmaz; yalnız taslak kabul eder')
+    config.validate_resolution(image.width, image.height)
+    if (image.width,image.height) != (config.reference_width,config.reference_height):
+        raise ValueError('Taslak koordinatları yalnız orijinal referans piksel çözünürlüğünde çizilir')
+    image = image.convert('RGB').copy()
+    draw = ImageDraw.Draw(image)
+    regions = [*config.animal_rois, *config.feeder_rois, *config.stalls]
+    for n, region in enumerate(regions, 1):
+        color = 'lime' if region in config.animal_rois else 'cyan'
+        points = region.points()
+        draw.polygon(points, outline=color, width=5)
+        for vertex, (x, y) in enumerate(points, 1):
+            draw.ellipse((x-6, y-6, x+6, y+6), fill=color)
+            at = (min(x+8, image.width-90), min(y+8, image.height-36))
+            draw.text(at, f'{n}.{vertex}', fill=color, stroke_width=2, stroke_fill='black', font=_font())
+        x, y = (sum(p[axis] for p in points)/len(points) for axis in (0, 1))
+        draw.text((x, y), f'{n}: {region.id}', fill=color, font=_font(), stroke_width=2, stroke_fill='black')
+    return _label(image, f'{DRAFT_LABEL} | PTS {pts} | {offset:.3f} sn')
+
+
 def review_rois(source: Path, config_path: Path, output_dir: Path, notes: Path | None = None) -> dict:
     config = load(config_path)
     if not config.placeholder or config.geometry_verification is not None:
@@ -32,23 +54,7 @@ def review_rois(source: Path, config_path: Path, output_dir: Path, notes: Path |
         report.append(f'| {n} | {region.id} | {region.points()} |')
     samples = []
     for i, frame in enumerate(frames, 1):
-        image = frame.image.to_image().convert('RGB')
-        draw = ImageDraw.Draw(image)
-        for n, region in enumerate(regions, 1):
-            color = 'lime' if region in config.animal_rois else 'cyan'
-            points = region.points()
-            draw.polygon(points, outline=color, width=5)
-            for vertex, (x, y) in enumerate(points, 1):
-                draw.ellipse((x-6, y-6, x+6, y+6), fill=color)
-                # Edge vertices remain visible inside the image.
-                at = (min(x+8, image.width-90), min(y+8, image.height-36))
-                draw.text(at, f'{n}.{vertex}', fill=color, stroke_width=2,
-                          stroke_fill='black', font=_font())
-            x = sum(p[0] for p in points) / len(points)
-            y = sum(p[1] for p in points) / len(points)
-            draw.text((x, y), f'{n}: {region.id}', fill=color, font=_font(),
-                      stroke_width=2, stroke_fill='black')
-        image = _label(image, f'{DRAFT_LABEL} | PTS {frame.pts} | {frame.offset:.3f} sn')
+        image = render_draft(frame.image.to_image(), config, frame.pts, frame.offset)
         name = f'roi_draft_{i:02d}.png'
         with (output_dir / name).open('xb') as target:
             image.save(target, format='PNG')
