@@ -1,0 +1,18 @@
+{
+  "schema_version": "izge-model-lock-1",
+  "model_class": "RFDETRSegSmall",
+  "package": "rfdetr",
+  "package_version": "1.11.2",
+  "revision": "7433d5919d0f7e72cc6cb78663e0a731afd499e0",
+  "release": "https://github.com/roboflow/rf-detr/releases/tag/1.11.2",
+  "package_wheel_sha256": "2f23589567123b59302f1cfa9d14d23630f9f583ee6f3468c5891e33fb103b2a",
+  "weights_url": "https://storage.googleapis.com/rfdetr/rf-detr-seg-s-ft.pth",
+  "weights_sha256": "6de3da31b2572cac214a1c76cce4a92a13966d56390ac2b3a3de9a8dc2b2bca3",
+  "weights_official_md5": "0a2a3006381d0c42853907e700eadd08",
+  "license": "Apache-2.0",
+  "input_size": [384, 384],
+  "backend": "RFDETRSegSmall ModelContext/LWDETR/PostProcess; no Supervision predict wrapper",
+  "coordinate_space": "postprocess_input_pixels",
+  "preprocessing": "RGB; bilinear square resize, antialias=false; ImageNet normalize; no letterbox",
+  "mask_policy": "library PostProcess to original input H,W; logit>0 (probability>0.5); binary bool"
+}
