@@ -191,12 +191,19 @@ def deduplicate_rois(detections: list[Detection]) -> list[Detection]:
 class RFDETRSegDetector:
     """Lazy real backend; normally constructed only by the isolated experiment interpreter."""
 
+    input_size = (384, 384)
+
     def __init__(self, weights: Path, device: str, config: BehaviorConfig, mode: str,
                  threshold: float = .5, model_lock: Path = MODEL_LOCK):
         if not isfinite(threshold) or not 0 < threshold < 1:
             raise ValueError('Skor eşiği (0,1) aralığında olmalı')
         self.config, self.mode, self.threshold = config, mode, threshold
         self.provenance = json.loads(model_lock.read_text(encoding='utf-8'))
+        expected_sizes = {'RFDETRSegSmall': (384, 384), 'RFDETRSegLarge': (504, 504)}
+        name = self.provenance.get('model_class')
+        if name not in expected_sizes or tuple(self.provenance.get('input_size', [])) != expected_sizes[name]:
+            raise DetectorUnavailable('model_class_or_native_resolution_mismatch')
+        self.input_size = expected_sizes[name]
         if not weights.is_file() or checksum(weights) != self.provenance['weights_sha256']:
             raise DetectorUnavailable('weights_missing_or_checksum_mismatch')
         self.weights = weights
@@ -209,14 +216,16 @@ class RFDETRSegDetector:
                 raise DetectorUnavailable('package_version_mismatch')
             import torch
             from torchvision.transforms import functional as F
-            from rfdetr import RFDETRSegSmall
+            import rfdetr
             from rfdetr.assets.coco_classes import COCO_CLASSES
             self.torch = torch
             self.functional = F
             self.capabilities = {'cpu': True, 'mps': torch.backends.mps.is_available(),
                                  'mps_built': torch.backends.mps.is_built(), 'cuda': torch.cuda.is_available()}
             self.device, self.fallback_reason = select_device(device, self.capabilities)
-            self.model = RFDETRSegSmall(pretrain_weights=str(weights.resolve()), device=self.device)
+            self.model = getattr(rfdetr, name)(pretrain_weights=str(weights.resolve()), device=self.device)
+            if self.model.model_config.resolution != self.input_size[0]:
+                raise DetectorUnavailable('model_native_resolution_mismatch')
             self.class_map = class_map_from_model(self.model, COCO_CLASSES)
             self.cow_id = cow_class_id(self.class_map)
             # Single-threaded experiment: transfer/eval during load, not the first prediction.
@@ -240,7 +249,7 @@ class RFDETRSegDetector:
         # Match pinned detr.py preprocessing; PostProcess receives original input H,W.
         with torch.inference_mode():
             tensor = F.to_tensor(image).to(self.device)
-            tensor = F.resize(tensor, [384, 384], antialias=False)
+            tensor = F.resize(tensor, list(self.input_size), antialias=False)
             tensor = F.normalize(tensor, self.model.means, self.model.stds)
             raw = context.model(tensor.unsqueeze(0))
             result = context.postprocess(raw, target_sizes=torch.tensor([[image.height, image.width]],
@@ -265,7 +274,7 @@ class RFDETRSegDetector:
         start = perf_counter()
         try:
             for region, crop in crops:
-                transform = CoordinateTransform.build(image.size, crop, (384, 384), mode='resize')
+                transform = CoordinateTransform.build(image.size, crop, self.input_size, mode='resize')
                 raw_crop = image.crop(crop)  # Not transform.apply(): library owns its internal resize.
                 prediction = self._predict(raw_crop)
                 converted = convert_predictions(prediction, self.class_map, transform, 'input',

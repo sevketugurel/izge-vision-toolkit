@@ -1,0 +1,25 @@
+{
+  "schema_version": "rfdetr-large-training-recipe-1",
+  "status": "prepared_not_run",
+  "model_class": "RFDETRSegLarge",
+  "rfdetr": "1.11.2",
+  "resolution": 504,
+  "pretrain_weights_sha256": "ca7b7c630ba22496067cc4f034c4e70c8e47fd7adcea04c3a49aa8c1755cbe6b",
+  "dataset_file": "roboflow",
+  "training_task": "segmentation",
+  "batch_size": 1,
+  "grad_accum_steps": 4,
+  "augmentation_backend": "torchvision",
+  "eval_backend": "faster_coco_eval",
+  "cuda_graphs": false,
+  "run_test": false,
+  "gpu_fit_verified": false,
+  "requirements": [
+    "real human complete-instance masks",
+    "verified recording-day/session independent split",
+    "Large query-weight compatibility review",
+    "actual Linux CUDA one-epoch smoke and measured VRAM",
+    "persistent full checkpoint resume check"
+  ],
+  "small_notebook_modified": false
+}

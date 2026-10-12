@@ -173,7 +173,7 @@ def test_backend_model_failure_is_not_exposed_as_success_or_raw_secret(tmp_path,
     weights = tmp_path / 'unit-only.pt'
     weights.write_text('unit fixture, not real model weights')
     lock = tmp_path / 'unit-lock.json'
-    lock.write_text(json.dumps({'weights_sha256': checksum(weights), 'package_version': 'unit-only'}))
+    lock.write_text(json.dumps({'weights_sha256': checksum(weights), 'model_class':'RFDETRSegSmall', 'input_size':[384,384], 'package_version': 'unit-only'}))
     monkeypatch.setattr(module, 'version', lambda _: 'unit-only')
     def fail(**kwargs):
         raise RuntimeError('private-token-from-backend')
@@ -246,14 +246,16 @@ def test_full_frame_passes_raw_image_without_draft_roi_crop(config):
     assert detector.detect(frame) == []
 
 
-def test_library_postprocess_owns_original_coordinates_without_second_inverse():
+@pytest.mark.parametrize("size", [384, 504])
+def test_library_postprocess_owns_original_coordinates_without_second_inverse(size):
     # Tensor fixture checks preprocessing and target_sizes without RF-DETR or downloaded weights.
     torch = pytest.importorskip('torch')
     detector = object.__new__(RFDETRSegDetector)
     detector.torch, detector.device, detector.threshold = torch, 'cpu', .5
+    detector.input_size = (size, size)
     detector.class_map = {21: 'cow'}
     def resize(tensor, size, antialias):
-        assert size == [384, 384] and antialias is False
+        assert size == list(detector.input_size) and antialias is False
         return torch.nn.functional.interpolate(tensor[None], size=size, mode='bilinear',
                                                align_corners=False, antialias=antialias)[0]
     detector.functional = SimpleNamespace(
@@ -261,7 +263,7 @@ def test_library_postprocess_owns_original_coordinates_without_second_inverse():
         resize=resize,
         normalize=lambda t, mean, std: (t-torch.tensor(mean)[:, None, None])/torch.tensor(std)[:, None, None])
     def forward(tensor):
-        assert tensor.shape == (1, 3, 384, 384)
+        assert tensor.shape == (1, 3, size, size)
         assert tensor[0, 0, 0, 0].item() == pytest.approx((1.-.485)/.229)
         return {'unit_tensor_fixture': True}
     def postprocess(raw, target_sizes, score_threshold):

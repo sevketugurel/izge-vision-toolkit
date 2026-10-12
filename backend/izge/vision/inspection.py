@@ -30,9 +30,11 @@ def code_provenance() -> dict:
              *[f'backend/izge/vision/{n}.py' for n in
                ('config', 'geometry', 'timing', 'preflight', 'inspection', 'roi_review', 'detector',
                 'detection_inspection', 'data_inventory', 'data_preparation', 'annotation_data',
-                'video_experiment')],
+                'video_experiment', 'low_label', 'low_label_features', 'proposal_review')],
              *[f'scripts/{n}.py' for n in ('inventory_behavior_sources', 'prepare_behavior_pilot',
-                                          'export_behavior_annotations', 'inspect_behavior_window')]]
+                                          'export_behavior_annotations', 'inspect_behavior_window',
+                                          'compare_behavior_models', 'prepare_behavior_review_queue',
+                                          'create_behavior_proposal_review', 'import_behavior_review')]]
     try:
         commit = subprocess.run(['git', '-C', str(root), 'rev-parse', 'HEAD'], check=True,
                                 capture_output=True, text=True, timeout=5).stdout.strip()
