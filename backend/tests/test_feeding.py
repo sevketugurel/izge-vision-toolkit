@@ -24,10 +24,12 @@ def config(**changes):
 
 # --- config -------------------------------------------------------------------------------------
 
-def test_sample_synthetic_feeding_config_is_valid_and_marked_placeholder():
+def test_sample_synthetic_feeding_config_is_valid():
     cfg = camera_config.load('synthetic_feeding')
-    assert cfg.placeholder is True
+    assert cfg.placeholder is False
     assert {s.sira for s in cfg.stalls} == {'orta', 'sag'}
+    assert len(cfg.stalls) == 14
+    assert cfg.reference_resolution.width == 2560 and cfg.reference_resolution.height == 1440
     assert cfg.recorded_at_from_filename('synthetic_feeding_20261010_143000.mp4') == datetime(2026, 10, 10, 14, 30, tzinfo=IST)
 
 
