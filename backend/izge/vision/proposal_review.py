@@ -94,9 +94,20 @@ def validate_revision(package: Path, data: dict) -> dict:
         elif e.get("scope") not in ("full_frame_instance", "frame_complete") or frame["id"] not in full_ids:
             raise ValueError("Outside full-frame review queue")
         pid = e.get("proposal_id")
+        expected_item = (
+            "complete:" + frame["id"] if e["scope"] == "frame_complete"
+            else ("crop:" if e["scope"] == "posture_crop" else "full:") + (pid or e["item_id"][5:])
+        )
+        if e["item_id"] != expected_item:
+            raise ValueError("Review item/scope/proposal mismatch")
+        if e["scope"] == "posture_crop" and e["action"] not in {"accept", "correct", "reject", "unknown", "skip"}:
+            raise ValueError("Crop review cannot attest instance or frame completeness")
+        if (e["scope"] == "frame_complete") != (e["action"] == "frame_complete"):
+            raise ValueError("Frame completeness scope/action mismatch")
         if pid:
             p = raw[pid]
-            if p["frame_id"] != frame["id"] or e.get("proposal_mask_sha256") != p["mask_sha256"]:
+            if (p["frame_id"] != frame["id"] or e.get("proposal_mask_sha256") != p["mask_sha256"]
+                    or p["model_class"] != data["review_model"]):
                 raise ValueError("Proposal/frame provenance changed")
         elif e["action"] not in ("add_instance", "frame_complete"):
             raise ValueError("Proposal reference required")
@@ -120,6 +131,8 @@ def validate_revision(package: Path, data: dict) -> dict:
                 or not 0 <= box[1] < box[3] <= h
             ):
                 raise ValueError("Original pixel bbox required")
+            if e["action"] == "accept" and box != p["bbox_xyxy"]:
+                raise ValueError("Changed geometry requires an explicit correction event")
             if e["scope"] == "full_frame_instance":
                 mask = decode_rle(e["mask_rle"], w, h)
                 ys, xs = np.nonzero(mask)

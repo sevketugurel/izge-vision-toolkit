@@ -20,6 +20,11 @@ def feature_key(model: dict, item: dict) -> str:
         "pooling": "CLS_L2",
         "preprocess": "RGB_square224_bilinear_ImageNet",
     }
+    # A human bbox edit is a new reviewed input geometry even when clipping/rounding
+    # happens to produce the same integer crop. Do not silently reuse the old proposal feature.
+    if item.get("human_bbox_xyxy") is not None and item["human_bbox_xyxy"] != item.get("proposal_bbox_xyxy"):
+        record["human_bbox_xyxy"] = item["human_bbox_xyxy"]
+        record["crop_policy"] = "human_corrected_bbox_padding16_v1"
     return hashlib.sha256(json.dumps(record, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
 
