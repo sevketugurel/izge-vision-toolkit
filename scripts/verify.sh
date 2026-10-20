@@ -1,5 +1,5 @@
 #!/bin/sh
-# Full verification: lint, unit, PostgreSQL 18 integration (+ migration round trip),
+# Full verification: lint, unit, harness lint + tests, PostgreSQL 18 integration (+ migration round trip),
 # frontend build and Playwright e2e against a disposable Compose stack.
 # Uses its own Compose projects and volumes; never touches the development database.
 set -eu
