@@ -35,6 +35,10 @@ step "Birim testleri"
 uv run pytest -q -p no:cacheprovider --ignore=backend/tests/test_integration.py \
   --ignore=backend/tests/test_feeding_integration.py
 
+step "Harness birim testleri"
+(cd harness && uv sync --frozen && uv run --frozen ruff check src tests \
+  && uv run --frozen pytest -q -p no:cacheprovider)
+
 step "PostgreSQL 18 (Compose) + migration gidiş-dönüş"
 docker compose -f compose.test.yaml -p "$DB_PROJECT" up -d --wait
 export DATABASE_URL="$TEST_DATABASE_URL" PYTHONPATH=backend
