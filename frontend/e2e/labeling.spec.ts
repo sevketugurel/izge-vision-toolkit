@@ -68,9 +68,12 @@ test("kesit önizleme: yer tutucu config açıkça işaretli", async ({ page, re
   await page.goto("/");
   await page.getByLabel("İşletme").selectOption(farm.id);
   await page.getByRole("button", { name: "Kesit önizleme" }).click();
-  await page.getByLabel("Kamera config'i").selectOption("synthetic_feeding");
+  await page.getByLabel("Kamera config'i").selectOption("yer_tutucu_test");
   await expect(page.locator(".placeholder-warning")).toContainText("doldurulacak");
-  await expect(page.locator(".crop-preview polygon")).toHaveCount(10);
+  await expect(page.locator(".crop-preview polygon")).toHaveCount(1);
+  await page.getByLabel("Kamera config'i").selectOption("synthetic_feeding");
+  await expect(page.locator(".crop-preview polygon")).toHaveCount(14);
+  await expect(page.locator(".placeholder-warning")).toHaveCount(0);
   await page.getByLabel("Kamera config'i").selectOption("sentetik_test");
   await expect(page.locator(".crop-preview polygon")).toHaveCount(2);
   await expect(page.locator(".placeholder-warning")).toHaveCount(0);
