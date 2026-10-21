@@ -11,7 +11,8 @@ DB_PROJECT=izge-verify-db
 E2E_PROJECT=izge-verify
 export IZGE_TEST_DB_PORT="$DB_PORT"
 TEST_DATABASE_URL="postgresql+psycopg://izge:izge-test@127.0.0.1:$DB_PORT/izge_test"
-MEDIA_TMP="$(mktemp -d)"
+# Explicit template: macOS mktemp -d ignores TMPDIR, and the harness sandbox only allows writes under TMPDIR.
+MEDIA_TMP="$(mktemp -d "${TMPDIR:-/tmp}/izge-verify.XXXXXX")"
 
 step() { printf '\n== %s\n' "$1"; }
 cleanup() {
