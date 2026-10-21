@@ -1,5 +1,5 @@
 #!/bin/sh
-# Full verification: lint, unit, PostgreSQL 18 integration (+ migration round trip),
+# Full verification: lint, unit, harness lint + tests, PostgreSQL 18 integration (+ migration round trip),
 # frontend build and Playwright e2e against a disposable Compose stack.
 # Uses its own Compose projects and volumes; never touches the development database.
 set -eu
@@ -34,6 +34,10 @@ uv run ruff check backend scripts
 step "Birim testleri"
 uv run pytest -q -p no:cacheprovider --ignore=backend/tests/test_integration.py \
   --ignore=backend/tests/test_feeding_integration.py
+
+step "Harness birim testleri"
+(cd harness && uv sync --frozen && uv run --frozen ruff check src tests \
+  && uv run --frozen pytest -q -p no:cacheprovider)
 
 step "PostgreSQL 18 (Compose) + migration gidiş-dönüş"
 docker compose -f compose.test.yaml -p "$DB_PROJECT" up -d --wait
