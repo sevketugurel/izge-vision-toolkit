@@ -96,7 +96,8 @@ def release():
 def test_camera_config_api_and_validation(env):
     client, post, farm, base, barn, camera = env
     configs = {c['key']: c for c in client.get('/api/camera-configs').json()}
-    assert configs['synthetic_feeding']['placeholder'] is True and configs['sentetik_test']['stalls'] == 2
+    assert configs['yer_tutucu_test']['placeholder'] is True and configs['sentetik_test']['stalls'] == 2
+    assert configs['synthetic_feeding']['placeholder'] is False
     detail = client.get('/api/camera-configs/sentetik_test').json()
     assert detail['stalls'][0]['points'] == [[0, 0], [160, 0], [160, 180], [0, 180]]
     assert client.post(base + '/cameras', json={'name': 'x', 'barn_id': barn, 'config_key': 'yok'}).status_code in (404, 422)
@@ -127,8 +128,8 @@ def test_upload_rules(env, video, tmp_path):
 
 def test_placeholder_config_and_missing_model_are_refused(env, video):
     client, post, farm, base, barn, camera = env
-    placeholder = post(base + '/cameras', {'name': 'BA2', 'barn_id': barn, 'config_key': 'synthetic_feeding'})['id']
-    media = upload(client, base, placeholder, video, name='synthetic_feeding_20261010_143000.mp4').json()
+    placeholder = post(base + '/cameras', {'name': 'YT', 'barn_id': barn, 'config_key': 'yer_tutucu_test'})['id']
+    media = upload(client, base, placeholder, video, name='YER_TUTUCU_20261010_143000.mp4').json()
     r = client.post(base + '/labeling/samples', json={'media_id': media['id']})
     assert r.status_code == 422 and 'placeholder' in r.json()['detail']
     media = upload(client, base, camera, video).json()
