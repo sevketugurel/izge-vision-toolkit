@@ -12,7 +12,8 @@ ROOT = Path(__file__).resolve().parents[2]
 SKIPPED = ("postgres", "postgres-integration", "compose", "playwright-e2e")
 
 
-def run_verify(tmp_path, docker_status=None, require=False, docker_host="", fail_command=""):
+def run_verify(tmp_path, docker_status=None, require=False, docker_host="", fail_command="",
+               node_status=0, require_node=False):
     for directory in ("scripts", "harness", "frontend", "bin"):
         (tmp_path / directory).mkdir()
     for name in ("verify.sh", "verify_docker.sh"):
@@ -21,6 +22,9 @@ def run_verify(tmp_path, docker_status=None, require=False, docker_host="", fail
     for name in ("dirname", "mktemp", "rm"):
         (tmp_path / "bin" / name).symlink_to(shutil.which(name))
     log = tmp_path / "calls.log"
+    node = tmp_path / "bin" / "node"
+    node.write_text(f"#!/bin/sh\nprintf '%s\\n' \"node $*\" >> \"$CALL_LOG\"\nexit {node_status}\n")
+    node.chmod(0o755)
     for name in ("uv", "npm", "npx", "curl", "docker"):
         if name == "docker" and docker_status is None:
             continue
@@ -41,6 +45,7 @@ def run_verify(tmp_path, docker_status=None, require=False, docker_host="", fail
         "CALL_LOG": str(log),
         "FAIL_COMMAND": fail_command,
         "IZGE_VERIFY_REQUIRE_DOCKER": "1" if require else "0",
+        "IZGE_VERIFY_REQUIRE_NODE": "1" if require_node else "0",
         "IZGE_VERIFY_KEEP": "0",
         "DOCKER_HOST": docker_host,
         "TMPDIR": str(tmp_path),
@@ -127,3 +132,45 @@ def test_docker_step_failure_is_still_fatal(tmp_path):
     assert "VERIFY: FAILED (exit 23)" in result.stdout
     assert "uv run alembic" not in calls
     assert "SKIP:" not in result.stdout
+
+
+@pytest.mark.parametrize("node_status", [134, 1])
+def test_aborting_node_skips_only_frontend(tmp_path, node_status):
+    result, calls = run_verify(tmp_path, 0, node_status=node_status)
+    assert result.returncode == 0, result.stderr
+    assert "SKIP: frontend (node sandbox'ta başlatılamadı)" in result.stdout
+    assert "VERIFY: PASSED (KISMİ — atlanan: frontend)" in result.stdout
+    assert "\nVERIFY: PASSED\n" not in result.stdout
+    assert "npm" not in calls
+    assert "uv run ruff check backend scripts\n" in calls
+    assert "npx playwright test\n" in calls
+    assert "-p izge-verify up -d --build --wait\n" in calls
+
+
+def test_aborting_node_and_missing_docker_list_both_skips(tmp_path):
+    result, _ = run_verify(tmp_path, None, node_status=134)
+    assert result.returncode == 0, result.stderr
+    assert (
+        "VERIFY: PASSED (KISMİ — atlanan: postgres, postgres-integration, frontend, compose, playwright-e2e)"
+        in result.stdout
+    )
+
+
+@pytest.mark.parametrize("require_node", [False, True])
+def test_healthy_node_runs_frontend_step(tmp_path, require_node):
+    result, calls = run_verify(tmp_path, 0, node_status=0, require_node=require_node)
+    assert result.returncode == 0, result.stderr
+    assert calls.count("node --version\n") == 1
+    assert "SKIP:" not in result.stdout
+    assert "\nVERIFY: PASSED\n" in result.stdout
+    assert "npm ci --prefix frontend --no-audit --no-fund\n" in calls
+    assert "npm run build --prefix frontend\n" in calls
+
+
+def test_required_node_fails_when_probe_fails(tmp_path):
+    result, calls = run_verify(tmp_path, 0, node_status=134, require_node=True)
+    assert result.returncode != 0
+    assert "ERROR: node başlatılamadı; IZGE_VERIFY_REQUIRE_NODE=1" in result.stderr
+    assert "SKIP:" not in result.stdout
+    assert "VERIFY: PASSED" not in result.stdout
+    assert "npm" not in calls

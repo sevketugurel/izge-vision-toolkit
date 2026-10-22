@@ -6,6 +6,7 @@ set -eu
 cd "$(dirname "$0")/.."
 . ./scripts/verify_docker.sh
 verify_docker_init
+verify_node_init
 
 E2E_PORT="${IZGE_VERIFY_PORT:-18000}"
 DB_PORT="${IZGE_TEST_DB_PORT:-55432}"
@@ -68,8 +69,10 @@ if verify_docker_step postgres-integration; then
 fi
 
 step "Frontend kurulum ve build"
-npm ci --prefix frontend --no-audit --no-fund
-npm run build --prefix frontend
+if verify_node_step frontend; then
+  npm ci --prefix frontend --no-audit --no-fund
+  npm run build --prefix frontend
+fi
 
 step "Compose yığını (API + worker + PostgreSQL 18)"
 if verify_docker_step compose; then
