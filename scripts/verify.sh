@@ -33,7 +33,8 @@ step "Lint (ruff)"
 uv run ruff check backend scripts
 
 step "Birim testleri"
-uv run pytest -q -p no:cacheprovider --ignore=backend/tests/test_integration.py \
+uv run python -c 'import sys; print("VERIFY: Python stdout probe", flush=True); print("VERIFY: Python stderr probe", file=sys.stderr, flush=True)'
+PYTHONUNBUFFERED=1 uv run pytest -q -p no:cacheprovider --ignore=backend/tests/test_integration.py \
   --ignore=backend/tests/test_feeding_integration.py
 
 step "Harness birim testleri"
