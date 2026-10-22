@@ -40,3 +40,29 @@ verify_node_step() {
   VERIFY_SKIPPED="${VERIFY_SKIPPED:+$VERIFY_SKIPPED, }$1"
   return 1
 }
+
+# Probe after installing Chromium, so a clean checkout can still run e2e.
+verify_chromium_init() {
+  VERIFY_CHROMIUM_AVAILABLE=0
+  if command -v node >/dev/null 2>&1 && (cd frontend && node -e '
+    const { chromium } = require("playwright");
+    (async () => {
+      const browser = await chromium.launch({ headless: true, timeout: 5000 });
+      await browser.close();
+    })().catch(() => process.exit(1));
+  ') >/dev/null 2>&1; then
+    VERIFY_CHROMIUM_AVAILABLE=1
+  elif [ "${IZGE_VERIFY_REQUIRE_CHROMIUM:-0}" = 1 ]; then
+    printf '%s\n' 'ERROR: chromium başlatılamadı; IZGE_VERIFY_REQUIRE_CHROMIUM=1' >&2
+    return 1
+  fi
+}
+
+verify_chromium_step() {
+  if [ "$VERIFY_CHROMIUM_AVAILABLE" = 1 ]; then
+    return 0
+  fi
+  printf "SKIP: %s (chromium sandbox'ta başlatılamadı)\n" "$1"
+  VERIFY_SKIPPED="${VERIFY_SKIPPED:+$VERIFY_SKIPPED, }$1"
+  return 1
+}
