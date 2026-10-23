@@ -70,8 +70,8 @@ fi
 
 step "Frontend kurulum ve build"
 if verify_node_step frontend; then
-  npm ci --prefix frontend --no-audit --no-fund
-  npm run build --prefix frontend
+  verify_frontend_command npm ci --prefix frontend --no-audit --no-fund
+  verify_frontend_command npm run build --prefix frontend
 fi
 
 step "Compose yığını (API + worker + PostgreSQL 18)"
@@ -88,10 +88,10 @@ fi
 step "Playwright e2e"
 if verify_docker_step playwright-e2e; then
   if verify_node_step playwright-e2e; then
-    (cd frontend && npx playwright install chromium >/dev/null)
+    (cd frontend && verify_frontend_command npx playwright install chromium >/dev/null)
     verify_chromium_init
     if verify_chromium_step playwright-e2e; then
-      (cd frontend && IZGE_E2E_URL="http://127.0.0.1:$E2E_PORT" npx playwright test)
+      (cd frontend && IZGE_E2E_URL="http://127.0.0.1:$E2E_PORT" verify_frontend_command npx playwright test)
     fi
   fi
 fi
