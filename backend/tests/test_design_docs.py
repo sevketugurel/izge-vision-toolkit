@@ -72,6 +72,12 @@ def test_readme_links_resolve_and_no_screenshots_are_embedded():
 
 
 @pytest.mark.parametrize('filename', ['README.md', 'docs/VERIFICATION.md'])
+def test_documentation_has_no_merge_conflict_markers(filename):
+    text = (ROOT / filename).read_text()
+    assert not re.search(r'^(?:<{7}|={7}|>{7})(?:\s.*)?$', text, re.M), filename
+
+
+@pytest.mark.parametrize('filename', ['README.md', 'docs/VERIFICATION.md'])
 def test_sandbox_limits_are_explicit(filename):
     text = (ROOT / filename).read_text()
     # Only the current task entry is authoritative; historical runs remain intact.

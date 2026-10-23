@@ -87,9 +87,11 @@ fi
 
 step "Playwright e2e"
 if verify_docker_step playwright-e2e; then
-  (cd frontend && npx playwright install chromium >/dev/null)
-  verify_chromium_init
-  if verify_chromium_step playwright-e2e; then
-    (cd frontend && IZGE_E2E_URL="http://127.0.0.1:$E2E_PORT" npx playwright test)
+  if verify_node_step playwright-e2e; then
+    (cd frontend && npx playwright install chromium >/dev/null)
+    verify_chromium_init
+    if verify_chromium_step playwright-e2e; then
+      (cd frontend && IZGE_E2E_URL="http://127.0.0.1:$E2E_PORT" npx playwright test)
+    fi
   fi
 fi
