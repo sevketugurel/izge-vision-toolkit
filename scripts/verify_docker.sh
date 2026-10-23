@@ -37,25 +37,30 @@ verify_node_diagnostic_suffix() {
   fi
 }
 
-# Only silent startup aborts of npm install/build qualify for an environment skip.
-# Any output is treated as application evidence; do not guess from error text.
+_has_js_trace() {
+  grep -Ei 'npm ERR|npm error|vite|at[[:space:]]+.*\.js|node_modules/' "$1" >/dev/null
+}
+
+# Retry npm install/build aborts once; keep JS/tool evidence from either attempt.
+# Silent and native-only aborts qualify for a partial environment skip.
 verify_frontend_command() {
   verify_frontend_attempt=1
+  verify_frontend_has_js_trace=0
   verify_frontend_output=$(mktemp "${TMPDIR:-/tmp}/izge-verify-node.XXXXXX") || return 1
   while :; do
     verify_frontend_status=0
     verify_node_command "$@" >"$verify_frontend_output" 2>&1 || verify_frontend_status=$?
     if [ -s "$verify_frontend_output" ]; then
       cat "$verify_frontend_output"
-      verify_frontend_silent=0
-    else
-      verify_frontend_silent=1
+    fi
+    if _has_js_trace "$verify_frontend_output"; then
+      verify_frontend_has_js_trace=1
     fi
     if [ "$verify_frontend_status" != 134 ]; then
       break
     fi
     verify_node_crash_dump
-    if [ "$verify_frontend_silent" = 1 ] && [ "$1" = npm ]; then
+    if [ "$1" = npm ]; then
       if [ "$verify_frontend_attempt" = 1 ]; then
         printf '%s\n' 'VERIFY: frontend gerçek komut exit 134; yeniden deneme 1/1'
         verify_frontend_attempt=2
@@ -64,7 +69,7 @@ verify_frontend_command() {
       if [ "${IZGE_VERIFY_REQUIRE_NODE:-0}" = 1 ]; then
         printf 'ERROR: node başlatılamadı; IZGE_VERIFY_REQUIRE_NODE=1 (gerçek komut 134)%s\n' \
           "$(verify_node_diagnostic_suffix)" >&2
-      else
+      elif [ "$verify_frontend_has_js_trace" = 0 ]; then
         VERIFY_NODE_AVAILABLE=0
         VERIFY_NODE_SKIP_REASON="node sandbox'ta başlatılamadı — gerçek komut 134"
         verify_node_step frontend || true

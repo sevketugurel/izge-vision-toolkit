@@ -45,7 +45,7 @@ if name == "node":
 if name == "npm" and args[0] == os.getenv("FAIL_STEP"):
     stream = os.getenv("FAIL_OUTPUT_STREAM")
     if stream:
-        print("TypeError: frontend failed\\n    at build (build.js:1:1)",
+        print(os.getenv("FAIL_OUTPUT", "TypeError: frontend failed\\n    at build (build.js:1:1)"),
               file=sys.stderr if stream == "stderr" else sys.stdout)
     sys.exit(134)
 if name == "launchctl":
@@ -130,7 +130,7 @@ def test_frontend_abort_preserves_failure_and_reports_path(verification, step, s
     assert result.returncode == 134
     assert diagnostic.is_file()
     assert "TypeError: frontend failed" in result.stdout
-    assert sum(name == "npm" and args[0] == step for name, args, *_ in calls) == 1
+    assert sum(name == "npm" and args[0] == step for name, args, *_ in calls) == 2
     assert "SKIP: frontend" not in result.stdout
     assert f"FAIL: frontend (exit 134) — tanı: {diagnostic}" in result.stderr
     assert "VERIFY: FAILED (exit 134)" in result.stdout
@@ -174,3 +174,44 @@ def test_thread_budget_is_scoped_and_healthy_probe_builds(verification, inherite
         else:
             assert node_options == original.get("NODE_OPTIONS")
             assert pool_size == original.get("UV_THREADPOOL_SIZE")
+
+
+@pytest.fixture(params=[
+    ("task-691-a550", "0x1004c1720", "60132"),
+    ("task-697-a554", "0x10491d720", "76524"),
+    ("task-700-a557", "0x1047d5720", "2130"),
+    ("task-683-a544", "0x100575720", "17702"),
+], ids=lambda case: case[0])
+def native_abort_log(request):
+    # Representative native frames and shell abort line from the four real logs.
+    _, address, pid = request.param
+    return (
+        "----- Native stack trace -----\n\n"
+        f" 3: {address} node::Start(int, char**) "
+        "[~/.nvm/versions/node/v22.18.0/bin/node]\n"
+        " 4: 0x19bc6be80 start [/usr/lib/dyld]\n"
+        f"./scripts/verify_docker.sh: line 7: {pid} Abort trap: 6           "
+        'NODE_OPTIONS="$VERIFY_NODE_OPTIONS" UV_THREADPOOL_SIZE="$VERIFY_UV_THREADPOOL_SIZE" "$@"\n'
+    )
+
+
+@pytest.mark.parametrize("step", ["ci", "run"])
+@pytest.mark.parametrize("stream", ["stdout", "stderr"])
+def test_native_frontend_abort_retries_and_skips_with_diagnostics(
+    verification, native_abort_log, step, stream,
+):
+    result, calls, diagnostic = verification(
+        FAIL_STEP=step, FAIL_OUTPUT_STREAM=stream, FAIL_OUTPUT=native_abort_log,
+    )
+    assert result.returncode == 0, result.stderr
+    assert native_abort_log in result.stdout
+    assert sum(name == "npm" and args[0] == step for name, args, *_ in calls) == 2
+    assert result.stdout.count("yeniden deneme 1/1") == 1
+    assert "SKIP: frontend" in result.stdout
+    assert "VERIFY: PASSED (KISMİ — atlanan: frontend, playwright-e2e)" in result.stdout
+    assert "\nVERIFY: PASSED\n" not in result.stdout
+    assert str(diagnostic) in result.stdout
+    assert 0 < diagnostic.stat().st_size <= 65536
+    assert not any(name == "npx" for name, *_ in calls)
+    if step == "ci":
+        assert not any(name == "npm" and args[:2] == ["run", "build"] for name, args, *_ in calls)
