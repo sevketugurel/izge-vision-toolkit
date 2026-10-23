@@ -2,7 +2,7 @@
 
 Saha kayıtları, video işleme, PostgreSQL iş kuyruğu, günlük kapsam raporu ve insan incelemesi için modüler monolit. GPU gerekmez. **Gerçek bir davranış modeli bağlı değildir.** Gerçek dosya adaptörü kareleri CPU üzerinde çözer ve `unavailable` gözlemleri üretir. Sentetik analiz yalnızca ayrı demo işletmesinde kullanılabilir.
 
-> Teslim durumu: `make verify` (lint, birim, PostgreSQL 18 entegrasyon + migration gidiş-dönüş, frontend build, Compose yığını, Playwright e2e) temiz klonda geçiyor. v1 planı: [docs/V1_PLAN.md](docs/V1_PLAN.md). Ayrıntılar: [doğrulama kaydı](docs/VERIFICATION.md).
+> Teslim durumu: geçmiş tam doğrulama koşuları ve güncel kontrol sonuçları [doğrulama kaydında](docs/VERIFICATION.md) ayrı tutulur. Bu sandbox'ta Playwright e2e **SKIP** olarak raporlanır; başarılı sayılmaz. v1 planı: [docs/V1_PLAN.md](docs/V1_PLAN.md).
 
 ## Başlatma
 
@@ -66,6 +66,91 @@ npm run dev --prefix frontend
 ```
 
 Frontend Vite geliştirme sunucusu `/api` isteklerini port 8000'e yönlendirir. Üretim frontend derlemesi FastAPI tarafından sunulur. Uygulama adı yalnızca `IZGE_APP_NAME` ile belirlenir; arayüz `/api/config` üzerinden alır.
+
+## Tasarım dili
+
+Panel Türkçe metinler, koyu yeşil gezinme alanı, açık zemin ve beyaz kartlar kullanır.
+Uygulama adı `IZGE_APP_NAME` → `GET /api/config` → `app_name` üzerinden gelir;
+sayfa başlığı ve menü markası bu değeri kullanır. Kaynaklar:
+[stil kuralları](frontend/src/style.css), [panel](frontend/src/main.tsx) ve
+[yemde/etiketleme bileşenleri](frontend/src/feeding.tsx).
+
+| Kullanım | CSS seçicisi | Özellik | Değer |
+|---|---|---|---|
+| Ana metin | `:root` | `color` | `#243c37` |
+| Sayfa zemini | `:root` | `background` | `#f5f7f4` |
+| Yan menü | `aside` | `background` | `#153a35` |
+| Etkin menü | `nav button.active` | `background` | `#dce9a5` |
+| Birincil eylem | `.primary` | `background` | `#285b48` |
+| Demo uyarısı | `.demo-banner` | `background` | `#faf0d7` |
+| Yemde | `.state-yemde` | `fill` | `#3f9a5b` |
+| Yemde değil | `.state-yemde_degil` | `fill` | `#d7dfcc` |
+| Görünmüyor | `.state-gorunmuyor` | `fill` | `#8a8f99` |
+| Gözlenmeyen aralık | `.unobserved` | `fill` | `#f6f7f3` |
+
+- Yazı ailesi Inter, ardından sistem yazı tipleridir; temel boyut 14 px'tir.
+  Kartlar 11 px köşe yarıçapı ve ince kenarlık kullanır. Form alanları etiketli,
+  butonların devre dışı durumu görünür, klavye odağının dış boşluğu 3 px'tir.
+- Geniş ekranda sabit yan menü 248 px'tir. `1100px` altında istatistikler iki,
+  içerik sütunları bire düşer. `700px` altında menü üstte yatay kaydırılır,
+  medya ve etiketleme alanları tek sütuna geçer; tablolar yatay kaydırılabilir.
+- Demo, model yok, yer tutucu, yükleme, hata ve boş veri durumları metinle açıklanır.
+  Yemde zaman çizelgesinin renkleri açıklama anahtarıyla birlikte gösterilir;
+  görünmüyor ile gözlenmeyen aralık ayrı tutulur.
+
+README ekran görüntüsü içermez. Ekran görüntüsü üretimi ve görsel inceleme
+**sandbox dışında** yapılır; bu görevde çalıştırılmadı ve başarılı sayılmaz.
+Kaynak kontrolleri yerleşim, renk karşıtlığı veya tarayıcı erişilebilirliği kabulü değildir.
+
+## API sözleşmesi
+
+Çalışan API'nin tam alan/tip şeması `/openapi.json`, etkileşimli belgesi `/docs`
+adresindedir. Kaynaklar: [ana API](backend/izge/api.py),
+[yemde API'si](backend/izge/feeding_api.py) ve [istemci](frontend/src/api.ts).
+İşletme kapsamlı uçlar `/api/v1/farms/{farm_id}` altında UUID kimlikler kullanır;
+bu kapsam kontrolü kullanıcı yetkilendirmesi sağlamaz (bkz. operasyon sınırları).
+
+| Yöntem | Yol | İstek / yanıt |
+|---|---|---|
+| GET | `/api/config` | `app_name`, `model_status`, `default_analyzer`, `local_only`, `pilot_config`, `max_upload_bytes` |
+| GET | `/api/health` | DB erişimi başarılıysa `{"status":"ok"}` |
+| GET | `/api/v1/farms` | İşletme listesi |
+| POST | `/api/v1/farms` | JSON `name`, isteğe bağlı `timezone`; 201, demo olmayan işletme |
+| POST | `/api/v1/farms/{farm_id}/media` | Sorguda `camera_id`; multipart `file`, isteğe bağlı `recorded_at`; 201, medya metaverisi |
+| GET | `/api/v1/farms/{farm_id}/media/{media_id}/file` | `kind=original\|thumbnail\|preview` (varsayılan `preview`); dosya içeriği |
+| GET | `/api/v1/farms/{farm_id}/evidence/{evidence_id}/file` | Kanıt dosyası içeriği |
+| POST | `/api/v1/farms/{farm_id}/media/{media_id}/time` | JSON `recorded_at`, `note`; yeni zaman eşleme `version` değeri |
+| POST | `/api/v1/farms/{farm_id}/runs` | JSON `media_id`, isteğe bağlı analizör/model/offset alanları; 201, analiz kaydı |
+| GET | `/api/v1/farms/{farm_id}/runs/{run_id}` | Analiz, `job` ve `observation_count` |
+| GET | `/api/v1/farms/{farm_id}/report` | Zorunlu `day` (YYYY-MM-DD), isteğe bağlı `animal_id`; işletme saat diliminde günlük rapor |
+| POST | `/api/v1/farms/{farm_id}/annotations` | Video offsetleri ve etiket; düzeltme `supersedes_id` ile yeni kayıt ekler; 201 |
+| POST | `/api/v1/farms/{farm_id}/events/{event_id}/reviews` | İnceleme kararı; `manual` kökenli yeni kayıt; 201 |
+| GET | `/api/v1/farms/{farm_id}/export` | `format=json\|csv`; sürüm, köken ve geçmişi koruyan indirme |
+| GET | `/api/camera-configs` | Kamera config listesi ve geçerlilik bilgisi |
+| GET | `/api/v1/farms/{farm_id}/feeding/models` | Yemde modelleri ve kullanılabilirlik durumu |
+| GET | `/api/v1/farms/{farm_id}/feeding/timeline` | Bölme bazlı zaman çizelgesi |
+| GET | `/api/v1/farms/{farm_id}/feeding/daily` | Günlük yemde özetleri |
+| GET | `/api/v1/farms/{farm_id}/feeding/daily.csv` | Günlük yemde özetlerinin CSV indirmesi |
+| POST | `/api/v1/farms/{farm_id}/labeling/samples` | Etiketleme örnekleri oluşturur; 201 |
+| GET | `/api/v1/farms/{farm_id}/labeling/next` | Sıradaki örnek |
+| POST | `/api/v1/farms/{farm_id}/labels` | İnsan etiketi ekler; 201 |
+| POST | `/api/v1/farms/{farm_id}/labels/{label_id}/undo` | Geri alma kaydı ekler; 201 |
+
+JSON isteklerde `Content-Type: application/json` kullanılır. Multipart yüklemede
+tarayıcı sınır başlığını kendisi üretir. İstemci 204 yanıtını `null`, diğer başarılı
+JSON yanıtlarını nesne/liste olarak okur; dosya uçları indirme veya medya URL'si olarak kullanılır.
+Hatalar `detail` alanıyla döner: 404 bulunamayan kaynak, 409 ilişki/benzersizlik/tarihsel
+çakışma, 413 yükleme sınırı, 422 geçersiz giriş; değiştirilemeyen geçmiş için 405.
+Doğrulama hatasında `detail` liste olabilir; panel bu durumda genel form hatası gösterir.
+
+Yükleme sınırı `/api/config` içindeki `max_upload_bytes` değeridir. Config bağlı kamera
+yalnız H.264 MP4 kabul eder; başlangıç dosya adından çözülemezse `recorded_at` gerekir.
+Diğer kameralar MP4/MOV/MKV/AVI kabul eder. Video uçları disk yolu almaz;
+yanıtlar ve export secret değerlerini veya depolama anahtarlarını yayımlamaz.
+`manual`, `model`, `demo`, `unavailable` kökenleri korunur; demo yalnız demo işletmesi
+ve demo medyada çalışır. Manuel inceleme otomatik süreleri değiştirmez; zaman düzeltmesi
+eski analizi değiştirmez ve yeni analiz gerektirir. Saat doğrulanmadan güncel yerleşimden
+hayvan kimliği çıkarılmaz; ölçülen süre ile bilinmeyen süre ayrı tutulur.
 
 ## Kontroller
 
