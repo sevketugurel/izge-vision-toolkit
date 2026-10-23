@@ -161,7 +161,8 @@ def test_aborting_node_and_missing_docker_list_both_skips(tmp_path):
 def test_healthy_node_runs_frontend_step(tmp_path, require_node):
     result, calls = run_verify(tmp_path, 0, node_status=0, require_node=require_node)
     assert result.returncode == 0, result.stderr
-    assert calls.count("node --version\n") == 1
+    assert calls.count("node -p 1\n") == 1
+    assert "node --version" not in calls
     assert "SKIP:" not in result.stdout
     assert "\nVERIFY: PASSED\n" in result.stdout
     assert "npm ci --prefix frontend --no-audit --no-fund\n" in calls
