@@ -20,10 +20,10 @@ verify_docker_step() {
   return 1
 }
 
-# Cheap node health probe (node may abort with 134/SIGABRT inside the sandbox).
+# Initialize V8/platform too (node may abort with 134/SIGABRT inside the sandbox).
 verify_node_init() {
   VERIFY_NODE_AVAILABLE=0
-  if command -v node >/dev/null 2>&1 && node --version >/dev/null 2>&1; then
+  if command -v node >/dev/null 2>&1 && node -p 1 >/dev/null 2>&1; then
     VERIFY_NODE_AVAILABLE=1
   elif [ "${IZGE_VERIFY_REQUIRE_NODE:-0}" = 1 ]; then
     printf '%s\n' 'ERROR: node başlatılamadı; IZGE_VERIFY_REQUIRE_NODE=1' >&2
