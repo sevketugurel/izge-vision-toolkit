@@ -135,15 +135,16 @@ def test_docker_step_failure_is_still_fatal(tmp_path):
 
 
 @pytest.mark.parametrize("node_status", [134, 1])
-def test_aborting_node_skips_only_frontend(tmp_path, node_status):
+def test_aborting_node_skips_frontend_and_e2e(tmp_path, node_status):
     result, calls = run_verify(tmp_path, 0, node_status=node_status)
     assert result.returncode == 0, result.stderr
     assert "SKIP: frontend (node sandbox'ta başlatılamadı)" in result.stdout
-    assert "VERIFY: PASSED (KISMİ — atlanan: frontend)" in result.stdout
+    assert "SKIP: playwright-e2e (chromium sandbox'ta başlatılamadı)" in result.stdout
+    assert "VERIFY: PASSED (KISMİ — atlanan: frontend, playwright-e2e)" in result.stdout
     assert "\nVERIFY: PASSED\n" not in result.stdout
     assert "npm" not in calls
     assert "uv run ruff check backend scripts\n" in calls
-    assert "npx playwright test\n" in calls
+    assert "npx playwright test\n" not in calls
     assert "-p izge-verify up -d --build --wait\n" in calls
 
 
