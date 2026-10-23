@@ -1,6 +1,6 @@
 # İzge çalışma kuralları
 
-- Her oturumda önce docs/V1_PLAN.md ve docs/VERIFICATION.md'yi oku; kaldığın kilometre taşından devam et.
+- Her oturumda önce docs/PROJE_DURUMU.md'yi ve docs/VERIFICATION.md'nin başlık yapısını oku; yalnız gereken bölümleri aç, kaldığın kilometre taşından devam et.
 - Kullanıcıya Türkçe, kod ve tiplerde İngilizce kullanın. Marka adı `IZGE_APP_NAME` üzerinden gelir.
 - Domain modülü ORM, HTTP ve video kitaplıklarına bağımlı olmamalıdır.
 - `manual`, `model`, `demo`, `unavailable` kökenlerini koruyun. Demo yalnızca demo işletmesi ve demo medyada çalışır.
