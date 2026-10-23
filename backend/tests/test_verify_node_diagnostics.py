@@ -20,7 +20,7 @@ def verification(tmp_path):
         (tmp_path / name).mkdir()
     for name in ("verify.sh", "verify_docker.sh"):
         shutil.copyfile(ROOT / "scripts" / name, tmp_path / "scripts" / name)
-    for name in ("dirname", "mktemp", "rm", "head", "sort", "grep", "find", "wc", "id"):
+    for name in ("dirname", "mktemp", "rm", "head", "sort", "grep", "find", "wc", "id", "cat"):
         (tmp_path / "bin" / name).symlink_to(shutil.which(name))
     fake = tmp_path / "fake-tool"
     fake.write_text(f"#!{sys.executable}\n" + '''
@@ -43,6 +43,10 @@ if name == "node":
         print("v22.18.0" + "x" * int(os.getenv("DIAGNOSTIC_BYTES", "0")))
         sys.exit(134)  # Even diagnostics failing must not stop collection.
 if name == "npm" and args[0] == os.getenv("FAIL_STEP"):
+    stream = os.getenv("FAIL_OUTPUT_STREAM")
+    if stream:
+        print("TypeError: frontend failed\\n    at build (build.js:1:1)",
+              file=sys.stderr if stream == "stderr" else sys.stdout)
     sys.exit(134)
 if name == "launchctl":
     print("jetsam = 1\\ncpu time = 2\\nthread count = 3\\nSECRET_ENV=do-not-copy")
@@ -120,12 +124,33 @@ def test_diagnostic_tail_is_truncated_at_64_kib(verification):
 
 
 @pytest.mark.parametrize("step", ["ci", "run"])
-def test_frontend_abort_preserves_failure_and_reports_path(verification, step):
-    result, _, diagnostic = verification(FAIL_STEP=step)
+@pytest.mark.parametrize("stream", ["stdout", "stderr"])
+def test_frontend_abort_preserves_failure_and_reports_path(verification, step, stream):
+    result, calls, diagnostic = verification(FAIL_STEP=step, FAIL_OUTPUT_STREAM=stream)
     assert result.returncode == 134
     assert diagnostic.is_file()
+    assert "TypeError: frontend failed" in result.stdout
+    assert sum(name == "npm" and args[0] == step for name, args, *_ in calls) == 1
+    assert "SKIP: frontend" not in result.stdout
     assert f"FAIL: frontend (exit 134) — tanı: {diagnostic}" in result.stderr
     assert "VERIFY: FAILED (exit 134)" in result.stdout
+
+
+@pytest.mark.parametrize("step", ["ci", "run"])
+def test_silent_frontend_abort_retries_and_skips_with_diagnostics(verification, step):
+    result, calls, diagnostic = verification(FAIL_STEP=step)
+    assert result.returncode == 0, result.stderr
+    assert diagnostic.is_file()
+    assert 0 < diagnostic.stat().st_size <= 65536
+    assert sum(name == "npm" and args[0] == step for name, args, *_ in calls) == 2
+    assert result.stdout.count("yeniden deneme 1/1") == 1
+    assert (
+        "SKIP: frontend (node sandbox'ta başlatılamadı — gerçek komut 134)"
+        f" — tanı: {diagnostic}"
+    ) in result.stdout
+    assert "VERIFY: PASSED (KISMİ — atlanan: frontend, playwright-e2e)" in result.stdout
+    assert "FAIL: frontend" not in result.stderr
+    assert not any(name == "npx" for name, *_ in calls)
 
 
 def test_required_node_abort_reports_diagnostic_path(verification):
