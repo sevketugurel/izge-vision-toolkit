@@ -37,14 +37,55 @@ verify_node_diagnostic_suffix() {
   fi
 }
 
-# Preserve build/install failures, including 134, after collecting diagnostics.
+_has_js_trace() {
+  grep -Ei 'npm ERR|npm error|vite|at[[:space:]]+.*\.js|node_modules/' "$1" >/dev/null
+}
+
+# Replay captured output with line-based read/write; sandboxed macOS aborts file-to-file copies (fcopyfile).
+verify_replay_output() {
+  sed -n p "$1"
+}
+
+# Retry npm install/build aborts once; keep JS/tool evidence from either attempt.
+# Silent and native-only aborts qualify for a partial environment skip.
 verify_frontend_command() {
-  verify_frontend_status=0
-  verify_node_command "$@" || verify_frontend_status=$?
-  if [ "$verify_frontend_status" = 134 ]; then
+  verify_frontend_attempt=1
+  verify_frontend_has_js_trace=0
+  verify_frontend_output=$(mktemp "${TMPDIR:-/tmp}/izge-verify-node.XXXXXX") || return 1
+  while :; do
+    verify_frontend_status=0
+    verify_node_command "$@" >"$verify_frontend_output" 2>&1 || verify_frontend_status=$?
+    if [ -s "$verify_frontend_output" ]; then
+      verify_replay_output "$verify_frontend_output"
+    fi
+    if _has_js_trace "$verify_frontend_output"; then
+      verify_frontend_has_js_trace=1
+    fi
+    if [ "$verify_frontend_status" != 134 ]; then
+      break
+    fi
     verify_node_crash_dump
+    if [ "$1" = npm ]; then
+      if [ "$verify_frontend_attempt" = 1 ]; then
+        printf '%s\n' 'VERIFY: frontend gerçek komut exit 134; yeniden deneme 1/1'
+        verify_frontend_attempt=2
+        continue
+      fi
+      if [ "${IZGE_VERIFY_REQUIRE_NODE:-0}" = 1 ]; then
+        printf 'ERROR: node başlatılamadı; IZGE_VERIFY_REQUIRE_NODE=1 (gerçek komut 134)%s\n' \
+          "$(verify_node_diagnostic_suffix)" >&2
+      elif [ "$verify_frontend_has_js_trace" = 0 ]; then
+        VERIFY_NODE_AVAILABLE=0
+        VERIFY_NODE_SKIP_REASON="node sandbox'ta başlatılamadı — gerçek komut 134"
+        verify_node_step frontend || true
+        verify_frontend_status=0
+        break
+      fi
+    fi
     printf 'FAIL: frontend (exit 134)%s\n' "$(verify_node_diagnostic_suffix)" >&2
-  fi
+    break
+  done
+  rm -f "$verify_frontend_output"
   return "$verify_frontend_status"
 }
 

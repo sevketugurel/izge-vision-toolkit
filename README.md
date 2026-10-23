@@ -102,6 +102,50 @@ README ekran görüntüsü içermez. Ekran görüntüsü üretimi ve görsel inc
 **sandbox dışında** yapılır; bu görevde çalıştırılmadı ve başarılı sayılmaz.
 Kaynak kontrolleri yerleşim, renk karşıtlığı veya tarayıcı erişilebilirliği kabulü değildir.
 
+## Hareket dili
+
+Tek token kaynağı [design/motion-tokens.json](design/motion-tokens.json) dosyasıdır.
+[React presetleri](frontend/src/motion/presets.ts) ve
+[vanilla JS presetleri](harness/core/src/agent_harness/status_assets/motion-presets.js)
+bu JSON'u doğrudan okur; süre, easing, mesafe ve stagger değerlerini bileşenlerde
+yeniden tanımlamayın. Token süreleri ve stagger milisaniye, mesafeler pikseldir;
+React adaptörü `motion/react` için süreleri saniyeye çevirir.
+
+| Token | Değer |
+|---|---|
+| Süre: fast / normal / slow | 120 / 200 / 320 ms |
+| Giriş / çıkış easing | `cubic-bezier(0.2,0,0,1)` / `cubic-bezier(0.4,0,1,1)` |
+| Mesafe: small / medium / large | 4 / 8 / 16 px |
+| Stagger aralığı | 24–40 ms |
+| Overshoot | `false` |
+| Spring stiffness / damping | 500 / 40 |
+
+- Hareket, durum değişimini ve işlem geri bildirimini açıklamalıdır. Yeni geçişler
+  yalnız `opacity` ve `transform` kullanır; genişlik, yükseklik veya konumla
+  yerleşimi canlandırmayın. Overshoot ve zıplama eklemeyin. Spring gerekirse ortak
+  tokenları kullanın; mevcut giriş/çıkış presetleri cubic-bezier kullanır.
+- Giriş preseti normal süre + medium mesafe, çıkış preseti fast süre + small
+  mesafe kullanır; sıra gecikmesi öğe indeksi × minimum stagger'dır.
+  Panelde yemde özet satırları, etiketleme kartı, hata/son işlem bildirimi ve
+  kayıt başlangıcı yardım metni ortak React varyantlarını kullanır.
+- **Yeni görünümde yasaklılar:** cam efekti (`backdrop-filter`,
+  `-webkit-backdrop-filter`), `linear-gradient` ve `box-shadow`.
+  [Token koruma testleri](harness/core/tests/test_motion_tokens.py), yeni hareket
+  sabitlerini ve bu efektleri iki arayüz kaynak ağacında denetler. Testteki
+  `LEGACY_MOTION` / `LEGACY_EFFECTS` listeleri mevcut satırlar için sayılı
+  istisnalardır; yeni kullanımlara izin vermez ve tüm eski arayüzün taşındığı
+  anlamına gelmez.
+- **Reduced-motion:** `(prefers-reduced-motion: reduce)` seçiliyken süre,
+  mesafe ve stagger **0** olur. React tarafında `useReducedMotion()` sonucu
+  `getMotionVariants()` seçimine aktarılır; vanilla tüketicisi `matchMedia`
+  sonucuyla `getMotionPresets()` seçmelidir. Harness CSS ayrıca animasyon ve
+  transition'ları kapatır, yumuşak kaydırmayı kaldırır. İçerik ve durum mesajları
+  hareket olmadan da görünür kalmalıdır.
+
+Gzip bundle ölçümü, yöntemi ve çalıştırılan/çalıştırılmayan kontroller
+[doğrulama kaydındadır](docs/VERIFICATION.md). Reduced-motion Playwright
+senaryolarının bulunması, bu oturumda çalıştırıldıkları anlamına gelmez.
+
 ## API sözleşmesi
 
 Çalışan API'nin tam alan/tip şeması `/openapi.json`, etkileşimli belgesi `/docs`

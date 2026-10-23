@@ -14,15 +14,38 @@ SKIPPED = ("postgres", "postgres-integration", "compose", "playwright-e2e")
 
 def run_verify(tmp_path, docker_status=None, require=False, docker_host="", fail_command="",
                node_status=0, require_node=False, node_version="v22.18.0",
-               node_versions=None, runtime_status=0):
+               node_versions=None, runtime_status=0, frontend_statuses=(0,),
+               frontend_output="", frontend_stderr=False, frontend_step="run",
+               frontend_retry_output=None):
     for directory in ("scripts", "harness", "frontend", "bin"):
         (tmp_path / directory).mkdir()
     for name in ("verify.sh", "verify_docker.sh"):
         shutil.copyfile(ROOT / "scripts" / name, tmp_path / "scripts" / name)
     # An isolated PATH guarantees that the missing-docker case cannot find a host daemon.
-    for name in ("dirname", "mktemp", "rm"):
+    for name in ("dirname", "mktemp", "rm", "sed", "head", "grep"):
         (tmp_path / "bin" / name).symlink_to(shutil.which(name))
     log = tmp_path / "calls.log"
+    frontend_cases = "".join(
+        f"{index}) exit {status} ;;\n"
+        for index, status in enumerate(frontend_statuses, 1)
+    )
+    frontend_fake = (
+        'if [ "$1" = --frontend-command ]; then\n'
+        '  count=0\n'
+        '  if [ -f "$CALL_LOG.frontend-count" ]; then '
+        'read -r count < "$CALL_LOG.frontend-count"; fi\n'
+        '  count=$((count + 1))\n'
+        '  printf \'%s\\n\' "$count" > "$CALL_LOG.frontend-count"\n'
+        '  if [ "$count" = 2 ] && [ "$FRONTEND_RETRY_OVERRIDE" = 1 ]; then\n'
+        '    FRONTEND_OUTPUT=$FRONTEND_RETRY_OUTPUT\n'
+        '  fi\n'
+        '  if [ "$FRONTEND_STDERR" = 1 ]; then\n'
+        '    printf \'%s\' "$FRONTEND_OUTPUT" >&2\n'
+        '  else printf \'%s\' "$FRONTEND_OUTPUT"; fi\n'
+        f'  case "$count" in\n{frontend_cases}  esac\n'
+        f'  exit {frontend_statuses[-1]}\n'
+        'fi\n'
+    )
     node = tmp_path / "bin" / "node"
     if node_status is not None:
         versions = node_versions or [(node_status, node_version)] * 3
@@ -33,7 +56,8 @@ def run_verify(tmp_path, docker_status=None, require=False, docker_host="", fail
         node.write_text(
             "#!/bin/sh\n"
             'printf \'%s\\n\' "node $*" >> "$CALL_LOG"\n'
-            'if [ "$1" = --version ]; then\n'
+            + frontend_fake
+            + 'if [ "$1" = --version ]; then\n'
             '  count=0\n'
             '  if [ -f "$CALL_LOG.count" ]; then read -r count < "$CALL_LOG.count"; fi\n'
             '  count=$((count + 1))\n'
@@ -55,6 +79,8 @@ def run_verify(tmp_path, docker_status=None, require=False, docker_host="", fail
             f"  exit {docker_status or 0}\n"
             "fi\n"
             f'if [ "{name} $*" = "$FAIL_COMMAND" ]; then exit 23; fi\n'
+            f'if [ "{name} $1" = "npm $FRONTEND_STEP" ]; then '
+            'exec node --frontend-command "$@"; fi\n'
         )
         executable.chmod(0o755)
     env = {
@@ -62,6 +88,11 @@ def run_verify(tmp_path, docker_status=None, require=False, docker_host="", fail
         "PATH": str(tmp_path / "bin"),
         "CALL_LOG": str(log),
         "FAIL_COMMAND": fail_command,
+        "FRONTEND_STEP": frontend_step,
+        "FRONTEND_OUTPUT": frontend_output,
+        "FRONTEND_RETRY_OUTPUT": frontend_retry_output or "",
+        "FRONTEND_RETRY_OVERRIDE": "1" if frontend_retry_output is not None else "0",
+        "FRONTEND_STDERR": "1" if frontend_stderr else "0",
         "IZGE_VERIFY_REQUIRE_DOCKER": "1" if require else "0",
         "IZGE_VERIFY_REQUIRE_NODE": "1" if require_node else "0",
         "IZGE_VERIFY_KEEP": "0",
@@ -261,3 +292,123 @@ def test_runtime_probe_failure_is_not_retried(tmp_path):
     assert "sleep" not in calls
     assert "SKIP: frontend (node sandbox'ta başlatılamadı)" in result.stdout
     assert "npm" not in calls
+
+
+@pytest.mark.parametrize("frontend_step", ["ci", "run"])
+@pytest.mark.parametrize("docker_status", [0, 1])
+def test_silent_real_command_abort_retries_then_skips(tmp_path, frontend_step, docker_status):
+    result, calls = run_verify(
+        tmp_path, docker_status=docker_status, frontend_step=frontend_step,
+        frontend_statuses=(134,),
+    )
+    assert result.returncode == 0, result.stderr
+    assert calls.count("node --frontend-command") == 2
+    assert result.stdout.count("yeniden deneme 1/1") == 1
+    assert "SKIP: frontend (node sandbox'ta başlatılamadı — gerçek komut 134)" in result.stdout
+    skipped = (
+        "frontend, playwright-e2e" if docker_status == 0 else
+        "postgres, postgres-integration, frontend, compose, playwright-e2e"
+    )
+    assert f"VERIFY: PASSED (KISMİ — atlanan: {skipped})" in result.stdout
+    assert "FAIL:" not in result.stderr
+    assert "npx" not in calls
+    if frontend_step == "ci":
+        assert "npm run build --prefix frontend" not in calls
+    diagnostic = tmp_path / "verify-node-crash.txt"
+    assert diagnostic.is_file()
+    assert "node -v" in diagnostic.read_text()
+    assert str(diagnostic) in result.stdout
+
+
+@pytest.mark.parametrize("frontend_step", ["ci", "run"])
+@pytest.mark.parametrize("frontend_stderr", [False, True])
+@pytest.mark.parametrize("output", [
+    "npm ERR! code ELIFECYCLE\n",
+    "npm error command failed\n",
+    "vite build failed\n",
+    "Error: build failed\n    at build (build.js:1:1)\n",
+    "Error in /project/node_modules/tool/index.mjs\n",
+])
+def test_real_command_abort_with_js_output_remains_fatal(
+    tmp_path, frontend_step, frontend_stderr, output,
+):
+    result, calls = run_verify(
+        tmp_path, docker_status=0, frontend_step=frontend_step, frontend_statuses=(134,),
+        frontend_output=output, frontend_stderr=frontend_stderr,
+    )
+    assert result.returncode == 134
+    assert calls.count("node --frontend-command") == 2
+    assert output in result.stdout + result.stderr
+    assert "FAIL: frontend (exit 134)" in result.stderr
+    assert "VERIFY: FAILED (exit 134)" in result.stdout
+    assert "SKIP:" not in result.stdout
+    assert result.stdout.count("yeniden deneme 1/1") == 1
+    assert (tmp_path / "verify-node-crash.txt").is_file()
+
+
+@pytest.mark.parametrize("status", [127, 1, 2])
+@pytest.mark.parametrize("frontend_step", ["ci", "run"])
+def test_other_real_command_errors_remain_fatal(tmp_path, status, frontend_step):
+    result, calls = run_verify(
+        tmp_path, docker_status=0, frontend_step=frontend_step, frontend_statuses=(status,),
+    )
+    assert result.returncode == status
+    assert calls.count("node --frontend-command") == 1
+    assert f"VERIFY: FAILED (exit {status})" in result.stdout
+    assert "SKIP:" not in result.stdout
+    assert "yeniden deneme" not in result.stdout
+    assert not (tmp_path / "verify-node-crash.txt").exists()
+
+
+@pytest.mark.parametrize("frontend_step", ["ci", "run"])
+@pytest.mark.parametrize("output", ["", "Abort trap: 6\n 1: 0x100 node::Abort()\n"])
+def test_required_node_real_command_abort_fails_explicitly(tmp_path, frontend_step, output):
+    result, calls = run_verify(
+        tmp_path, docker_status=0, frontend_step=frontend_step,
+        frontend_statuses=(134,), require_node=True, frontend_output=output,
+    )
+    assert result.returncode == 134
+    assert calls.count("node --frontend-command") == 2
+    assert "IZGE_VERIFY_REQUIRE_NODE=1 (gerçek komut 134)" in result.stderr
+    assert "SKIP:" not in result.stdout
+    assert "VERIFY: FAILED (exit 134)" in result.stdout
+    assert (tmp_path / "verify-node-crash.txt").is_file()
+
+
+@pytest.mark.parametrize("statuses", [(0,), (134, 0)])
+@pytest.mark.parametrize("frontend_step", ["ci", "run"])
+def test_real_command_success_builds_normally(tmp_path, statuses, frontend_step):
+    result, calls = run_verify(
+        tmp_path, docker_status=0, frontend_step=frontend_step, frontend_statuses=statuses,
+    )
+    assert result.returncode == 0, result.stderr
+    assert calls.count("node --frontend-command") == len(statuses)
+    assert "npm run build --prefix frontend" in calls
+    assert "npx playwright test" in calls
+    assert "SKIP:" not in result.stdout
+    assert "\nVERIFY: PASSED\n" in result.stdout
+
+
+@pytest.mark.parametrize("status", [1, 2, 127])
+def test_retry_error_does_not_turn_into_skip(tmp_path, status):
+    result, calls = run_verify(tmp_path, docker_status=0, frontend_statuses=(134, status))
+    assert result.returncode == status
+    assert calls.count("node --frontend-command") == 2
+    assert "SKIP:" not in result.stdout
+    assert f"VERIFY: FAILED (exit {status})" in result.stdout
+
+
+@pytest.mark.parametrize("outputs", [
+    ("npm error build failed\n", "Abort trap: 6\n"),
+    ("Abort trap: 6\n", "vite build failed\n"),
+])
+def test_js_trace_in_either_attempt_prevents_skip(tmp_path, outputs):
+    result, calls = run_verify(
+        tmp_path, docker_status=0, frontend_statuses=(134,),
+        frontend_output=outputs[0], frontend_retry_output=outputs[1],
+    )
+    assert result.returncode == 134
+    assert calls.count("node --frontend-command") == 2
+    assert "SKIP:" not in result.stdout
+    assert "VERIFY: FAILED (exit 134)" in result.stdout
+    assert all(output in result.stdout for output in outputs)

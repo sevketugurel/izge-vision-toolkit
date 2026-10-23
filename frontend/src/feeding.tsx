@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { request, type Row } from "./api";
+import { getMotionVariants } from "./motion/presets";
 
 // Stall feeding pipeline pages: timeline + daily summary, crop config preview, labeling.
 export const STATE_LABELS: Record<string, string> = {
@@ -37,6 +39,12 @@ function useLoad<T>(path: string | null, deps: unknown[] = []) {
   }, [path, ...deps]);
   useEffect(() => reload(), [reload]);
   return { data, error, loading, reload };
+}
+
+// Shared enter/exit variants from motion presets; reduced motion zeroes duration and distance.
+function useMotionVariants() {
+  const reduced = useReducedMotion() ?? false;
+  return getMotionVariants(reduced);
 }
 
 function stallCameras(cameras: Row[] | undefined) {
@@ -207,6 +215,7 @@ export function FeedingPage({
   const demo = timeline.data?.is_demo || runs.some((r) => r.origin === "demo");
   const rows: Row[] = daily.data?.rows || [];
   const [fit, setFit] = useState(true);
+  const variants = useMotionVariants();
   return (
     <>
       <section className="card">
@@ -306,8 +315,14 @@ export function FeedingPage({
                 </tr>
               </thead>
               <tbody>
-                {rows.map((r) => (
-                  <tr key={r.stall}>
+                {rows.map((r, i) => (
+                  <motion.tr
+                    key={r.stall}
+                    custom={i}
+                    variants={variants}
+                    initial="hidden"
+                    animate="visible"
+                  >
                     <td>
                       <strong>{r.stall}</strong>
                       {r.origins?.includes("demo") && <small>DEMO</small>}
@@ -319,7 +334,7 @@ export function FeedingPage({
                     <td>{minutes(r.not_visible_seconds)}</td>
                     <td>{minutes(r.observed_seconds)}</td>
                     <td>{percent(r.mean_confidence)}</td>
-                  </tr>
+                  </motion.tr>
                 ))}
               </tbody>
             </table>
@@ -478,6 +493,7 @@ export function LabelingPage({ base, cameras }: { base: string; cameras: Row[] |
     [busy, setBusy] = useState(false);
   const history = useRef<{ id: string; label: string }[]>([]);
   const [last, setLast] = useState("");
+  const variants = useMotionVariants();
   const next = useCallback(async () => {
     if (!camera) return;
     try {
@@ -585,11 +601,21 @@ export function LabelingPage({ base, cameras }: { base: string; cameras: Row[] |
           />
         </label>
       </div>
-      {error && (
-        <div role="alert" className="alert">
-          {error}
-        </div>
-      )}
+      <AnimatePresence initial={false}>
+        {error && (
+          <motion.div
+            key="error"
+            role="alert"
+            className="alert"
+            variants={variants}
+            initial="hidden"
+            animate="visible"
+            exit="exit"
+          >
+            {error}
+          </motion.div>
+        )}
+      </AnimatePresence>
       {!list.length ? (
         <div className="empty">
           <p>Kesit config'i bağlı kamera yok.</p>
@@ -603,7 +629,14 @@ export function LabelingPage({ base, cameras }: { base: string; cameras: Row[] |
           </p>
         </div>
       ) : (
-        <div className="label-stage" data-sample={current.id}>
+        <motion.div
+          className="label-stage"
+          key={current.id}
+          data-sample={current.id}
+          variants={variants}
+          initial="hidden"
+          animate="visible"
+        >
           <figure>
             <img
               className="label-crop"
@@ -637,13 +670,24 @@ export function LabelingPage({ base, cameras }: { base: string; cameras: Row[] |
               <kbd>Z</kbd> Geri al
             </button>
           </div>
-        </div>
+        </motion.div>
       )}
-      {last && (
-        <p className="muted" role="status" aria-label="Son işlem">
-          {last}
-        </p>
-      )}
+      <AnimatePresence mode="wait" initial={false}>
+        {last && (
+          <motion.p
+            key={last}
+            className="muted"
+            role="status"
+            aria-label="Son işlem"
+            variants={variants}
+            initial="hidden"
+            animate="visible"
+            exit="exit"
+          >
+            {last}
+          </motion.p>
+        )}
+      </AnimatePresence>
       {progress && (
         <p className="muted">
           Etiket dağılımı: yemde {progress.counts?.yemde ?? 0} · yemde değil{" "}
@@ -684,6 +728,7 @@ export function RecordedAtField({
   filename: string;
 }) {
   const [parsed, setParsed] = useState<string | null>(null);
+  const variants = useMotionVariants();
   useEffect(() => {
     setParsed(null);
     if (!camera?.config_key || !filename) return;
@@ -706,13 +751,19 @@ export function RecordedAtField({
         required={!parsed}
         aria-describedby="recorded-at-hint"
       />
-      <small id="recorded-at-hint">
+      <motion.small
+        id="recorded-at-hint"
+        key={!filename ? "idle" : parsed ? "parsed" : "required"}
+        variants={variants}
+        initial="hidden"
+        animate="visible"
+      >
         {!filename
           ? "Dosya seçin; zaman önce dosya adından okunur."
           : parsed
             ? `Dosya adından okundu: ${new Date(parsed).toLocaleString("tr-TR", { timeZone: "Europe/Istanbul" })} (boş bırakabilirsiniz)`
             : "Dosya adından okunamadı; zorunlu."}
-      </small>
+      </motion.small>
     </label>
   );
 }

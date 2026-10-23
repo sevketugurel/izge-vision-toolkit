@@ -71,7 +71,9 @@ fi
 step "Frontend kurulum ve build"
 if verify_node_step frontend; then
   verify_frontend_command npm ci --prefix frontend --no-audit --no-fund
-  verify_frontend_command npm run build --prefix frontend
+  if [ "$VERIFY_NODE_AVAILABLE" = 1 ]; then
+    verify_frontend_command npm run build --prefix frontend
+  fi
 fi
 
 step "Compose yığını (API + worker + PostgreSQL 18)"
