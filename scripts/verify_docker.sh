@@ -41,6 +41,11 @@ _has_js_trace() {
   grep -Ei 'npm ERR|npm error|vite|at[[:space:]]+.*\.js|node_modules/' "$1" >/dev/null
 }
 
+# Replay captured output with line-based read/write; sandboxed macOS aborts file-to-file copies (fcopyfile).
+verify_replay_output() {
+  sed -n p "$1"
+}
+
 # Retry npm install/build aborts once; keep JS/tool evidence from either attempt.
 # Silent and native-only aborts qualify for a partial environment skip.
 verify_frontend_command() {
@@ -51,7 +56,7 @@ verify_frontend_command() {
     verify_frontend_status=0
     verify_node_command "$@" >"$verify_frontend_output" 2>&1 || verify_frontend_status=$?
     if [ -s "$verify_frontend_output" ]; then
-      cat "$verify_frontend_output"
+      verify_replay_output "$verify_frontend_output"
     fi
     if _has_js_trace "$verify_frontend_output"; then
       verify_frontend_has_js_trace=1

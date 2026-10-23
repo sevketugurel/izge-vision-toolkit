@@ -22,7 +22,7 @@ def run_verify(tmp_path, docker_status=None, require=False, docker_host="", fail
     for name in ("verify.sh", "verify_docker.sh"):
         shutil.copyfile(ROOT / "scripts" / name, tmp_path / "scripts" / name)
     # An isolated PATH guarantees that the missing-docker case cannot find a host daemon.
-    for name in ("dirname", "mktemp", "rm", "cat", "head", "grep"):
+    for name in ("dirname", "mktemp", "rm", "sed", "head", "grep"):
         (tmp_path / "bin" / name).symlink_to(shutil.which(name))
     log = tmp_path / "calls.log"
     frontend_cases = "".join(

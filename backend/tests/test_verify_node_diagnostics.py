@@ -20,7 +20,7 @@ def verification(tmp_path):
         (tmp_path / name).mkdir()
     for name in ("verify.sh", "verify_docker.sh"):
         shutil.copyfile(ROOT / "scripts" / name, tmp_path / "scripts" / name)
-    for name in ("dirname", "mktemp", "rm", "head", "sort", "grep", "find", "wc", "id", "cat"):
+    for name in ("dirname", "mktemp", "rm", "head", "sort", "grep", "find", "wc", "id", "sed"):
         (tmp_path / "bin" / name).symlink_to(shutil.which(name))
     fake = tmp_path / "fake-tool"
     fake.write_text(f"#!{sys.executable}\n" + '''
@@ -215,3 +215,15 @@ def test_native_frontend_abort_retries_and_skips_with_diagnostics(
     assert not any(name == "npx" for name, *_ in calls)
     if step == "ci":
         assert not any(name == "npm" and args[:2] == ["run", "build"] for name, args, *_ in calls)
+
+
+def test_captured_output_is_replayed_without_cat(verification, tmp_path):
+    assert not (tmp_path / "bin" / "cat").exists()
+    result, calls, _ = verification(
+        FAIL_STEP="ci", FAIL_OUTPUT_STREAM="stderr",
+        FAIL_OUTPUT="first line\nsecond line\n    at build (build.js:1:1)",
+    )
+    assert result.returncode == 134
+    assert "first line\nsecond line\n    at build (build.js:1:1)\n" in result.stdout
+    assert result.stdout.count("first line") == 2
+    assert "FAIL: frontend (exit 134)" in result.stderr
