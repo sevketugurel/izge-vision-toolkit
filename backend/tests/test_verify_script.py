@@ -13,7 +13,8 @@ SKIPPED = ("postgres", "postgres-integration", "compose", "playwright-e2e")
 
 
 def run_verify(tmp_path, docker_status=None, require=False, docker_host="", fail_command="",
-               node_status=0, require_node=False):
+               node_status=0, require_node=False, node_version="v22.18.0",
+               node_versions=None, runtime_status=0):
     for directory in ("scripts", "harness", "frontend", "bin"):
         (tmp_path / directory).mkdir()
     for name in ("verify.sh", "verify_docker.sh"):
@@ -23,9 +24,26 @@ def run_verify(tmp_path, docker_status=None, require=False, docker_host="", fail
         (tmp_path / "bin" / name).symlink_to(shutil.which(name))
     log = tmp_path / "calls.log"
     node = tmp_path / "bin" / "node"
-    node.write_text(f"#!/bin/sh\nprintf '%s\\n' \"node $*\" >> \"$CALL_LOG\"\nexit {node_status}\n")
-    node.chmod(0o755)
-    for name in ("uv", "npm", "npx", "curl", "docker"):
+    if node_status is not None:
+        versions = node_versions or [(node_status, node_version)] * 3
+        cases = "".join(
+            f"{index}) printf '%s' '{version}'; exit {status} ;;\n"
+            for index, (status, version) in enumerate(versions, 1)
+        )
+        node.write_text(
+            "#!/bin/sh\n"
+            'printf \'%s\\n\' "node $*" >> "$CALL_LOG"\n'
+            'if [ "$1" = --version ]; then\n'
+            '  count=0\n'
+            '  if [ -f "$CALL_LOG.count" ]; then read -r count < "$CALL_LOG.count"; fi\n'
+            '  count=$((count + 1))\n'
+            '  printf \'%s\\n\' "$count" > "$CALL_LOG.count"\n'
+            f'  case "$count" in\n{cases}  esac\n'
+            'fi\n'
+            f"exit {runtime_status}\n"
+        )
+        node.chmod(0o755)
+    for name in ("uv", "npm", "npx", "curl", "docker", "sleep"):
         if name == "docker" and docker_status is None:
             continue
         executable = tmp_path / "bin" / name
@@ -138,13 +156,19 @@ def test_docker_step_failure_is_still_fatal(tmp_path):
 def test_aborting_node_skips_frontend_and_e2e(tmp_path, node_status):
     result, calls = run_verify(tmp_path, 0, node_status=node_status)
     assert result.returncode == 0, result.stderr
-    assert "SKIP: frontend (node sandbox'ta başlatılamadı)" in result.stdout
-    assert "SKIP: playwright-e2e (chromium sandbox'ta başlatılamadı)" in result.stdout
+    suffix = " — 3 deneme" if node_status == 134 else ""
+    assert f"SKIP: frontend (node sandbox'ta başlatılamadı{suffix})" in result.stdout
+    assert f"SKIP: playwright-e2e (node sandbox'ta başlatılamadı{suffix})" in result.stdout
     assert "VERIFY: PASSED (KISMİ — atlanan: frontend, playwright-e2e)" in result.stdout
     assert "\nVERIFY: PASSED\n" not in result.stdout
     assert "npm" not in calls
     assert "uv run ruff check backend scripts\n" in calls
-    assert "npx playwright test\n" not in calls
+    assert "npx" not in calls
+    attempts = 3 if node_status == 134 else 1
+    assert calls.count("node --version\n") == attempts
+    assert calls.count("sleep 2\n") == attempts - 1
+    for attempt in range(1, attempts + 1):
+        assert f"VERIFY: node --version deneme {attempt}/3 (exit {node_status})" in result.stdout
     assert "-p izge-verify up -d --build --wait\n" in calls
 
 
@@ -158,11 +182,13 @@ def test_aborting_node_and_missing_docker_list_both_skips(tmp_path):
 
 
 @pytest.mark.parametrize("require_node", [False, True])
-def test_healthy_node_runs_frontend_step(tmp_path, require_node):
-    result, calls = run_verify(tmp_path, 0, node_status=0, require_node=require_node)
+@pytest.mark.parametrize("node_version", ["v20.0.0", "v22.18.0", "v200.0.0"])
+def test_healthy_node_runs_frontend_step(tmp_path, require_node, node_version):
+    result, calls = run_verify(tmp_path, 0, require_node=require_node, node_version=node_version)
     assert result.returncode == 0, result.stderr
     assert calls.count("node -p 1\n") == 1
-    assert "node --version" not in calls
+    assert calls.count("node --version\n") == 1
+    assert "sleep" not in calls
     assert "SKIP:" not in result.stdout
     assert "\nVERIFY: PASSED\n" in result.stdout
     assert "npm ci --prefix frontend --no-audit --no-fund\n" in calls
@@ -175,4 +201,63 @@ def test_required_node_fails_when_probe_fails(tmp_path):
     assert "ERROR: node başlatılamadı; IZGE_VERIFY_REQUIRE_NODE=1" in result.stderr
     assert "SKIP:" not in result.stdout
     assert "VERIFY: PASSED" not in result.stdout
+    assert "npm" not in calls
+
+
+@pytest.mark.parametrize("node_status", [None, 127])
+def test_missing_node_skips_without_retry(tmp_path, node_status):
+    result, calls = run_verify(tmp_path, 0, node_status=node_status)
+    assert result.returncode == 0, result.stderr
+    assert "VERIFY: node --version deneme 1/3 (exit 127)" in result.stdout
+    assert "deneme 2/3" not in result.stdout
+    assert "sleep" not in calls
+    assert "SKIP: frontend (node sandbox'ta başlatılamadı)" in result.stdout
+    assert "VERIFY: PASSED (KISMİ — atlanan: frontend, playwright-e2e)" in result.stdout
+    assert "npm" not in calls
+    assert "npx" not in calls
+
+
+def test_empty_version_retries_then_skips(tmp_path):
+    result, calls = run_verify(tmp_path, 0, node_version="")
+    assert result.returncode == 0, result.stderr
+    assert calls.count("node --version\n") == 3
+    assert calls.count("sleep 2\n") == 2
+    assert "node -p 1" not in calls
+    for attempt in range(1, 4):
+        assert f"VERIFY: node --version deneme {attempt}/3 (exit 0)" in result.stdout
+    assert "SKIP: frontend (node sandbox'ta başlatılamadı — 3 deneme)" in result.stdout
+    assert "VERIFY: PASSED (KISMİ" in result.stdout
+
+
+def test_transient_abort_recovers_and_builds(tmp_path):
+    result, calls = run_verify(
+        tmp_path, 0, node_versions=[(134, ""), (0, "v22.18.0")],
+    )
+    assert result.returncode == 0, result.stderr
+    assert calls.count("node --version\n") == 2
+    assert calls.count("sleep 2\n") == 1
+    assert calls.count("node -p 1\n") == 1
+    assert "npm run build --prefix frontend\n" in calls
+    assert "\nVERIFY: PASSED\n" in result.stdout
+
+
+def test_old_node_fails_with_clear_error_before_build(tmp_path):
+    result, calls = run_verify(tmp_path, 0, node_version="v18.20.8")
+    assert result.returncode == 1
+    assert result.stderr.splitlines() == [
+        "ERROR: node v18 < 20; npm PATH'i nvm node 22'yi göstermeli",
+    ]
+    assert "npm" not in calls
+    assert "node -p 1" not in calls
+    assert "SKIP:" not in result.stdout
+    assert "VERIFY: PASSED" not in result.stdout
+
+
+def test_runtime_probe_failure_is_not_retried(tmp_path):
+    result, calls = run_verify(tmp_path, 0, runtime_status=134)
+    assert result.returncode == 0, result.stderr
+    assert calls.count("node --version\n") == 1
+    assert calls.count("node -p 1\n") == 1
+    assert "sleep" not in calls
+    assert "SKIP: frontend (node sandbox'ta başlatılamadı)" in result.stdout
     assert "npm" not in calls
