@@ -77,6 +77,7 @@ def test_deterministic_split_sealed_access_and_integrity(sample):
     assert all(r['split'] == 'test' for r in manifest['items'] if r['camera'] == 'barn3')
     path = write_manifest(manifest, 'fixture', 'v1')
     assert path == Path(sample['root']) / 'manifests/fixture/v1/manifest.json'
+    assert json.loads(path.read_text())['version'] == 'v1'
     assert all(r['split'] != 'test' for r in load_manifest(path)['items'])
     assert all(s['camera'] != 'barn3' for s in load_manifest(path)['sources'])
     with pytest.raises(ValueError, match='sealed'):
@@ -88,6 +89,12 @@ def test_deterministic_split_sealed_access_and_integrity(sample):
         write_manifest(manifest, 'fixture', 'v1')
     with pytest.raises(ValueError):
         write_manifest(manifest, '../escape', 'v2')
+    invalid_version = json.loads(path.read_text())
+    invalid_version.pop('version')
+    path.write_text(json.dumps(invalid_version))
+    with pytest.raises(ValueError, match='version'):
+        load_manifest(path)
+    path.write_text(json.dumps({**invalid_version, 'version': 'v1'}))
     row = load_manifest(path)['items'][0]
     (Path(sample['root']) / row['path']).write_bytes(b'changed')
     with pytest.raises(ValueError, match='checksum'):
