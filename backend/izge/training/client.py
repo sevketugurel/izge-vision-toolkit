@@ -4,7 +4,12 @@ import json
 import os
 from pathlib import Path
 from urllib.error import HTTPError
-from urllib.request import Request, urlopen
+from urllib.request import Request, HTTPRedirectHandler, build_opener
+
+
+class NoRedirect(HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None  # Never forward the bearer token to a redirected host.
 
 
 def request(method, path, data=None):
@@ -12,7 +17,7 @@ def request(method, path, data=None):
     url = os.getenv('IZGE_RUNNER_URL', 'http://host.docker.internal:8765').rstrip('/')
     req = Request(url + path, data=json.dumps(data).encode() if data is not None else None, method=method,
                   headers={'Authorization': f'Bearer {token}', 'Content-Type': 'application/json'})
-    with urlopen(req, timeout=30) as response:
+    with build_opener(NoRedirect).open(req, timeout=5) as response:
         return json.load(response)
 
 

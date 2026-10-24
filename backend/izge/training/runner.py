@@ -17,6 +17,8 @@ import sys
 import time
 import uuid
 
+import yaml
+
 from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import Field
@@ -215,6 +217,17 @@ def create_app(root=None, token_path=None, registry=None):
         return dict(device=pick_device(), mps_available=torch.backends.mps.is_available(),
                     free_disk_bytes=shutil.disk_usage(root).free,
                     running_jobs=sum(row['state'] == 'running' for row in app.state.store.rows()))
+
+    @app.get('/configs', dependencies=[Depends(auth)])
+    def configs():
+        directory = registry or Path(os.getenv('IZGE_TRAINING_CONFIG_ROOT', ROOT / 'config/training/approved'))
+        values = []
+        for path in sorted(directory.glob('*.yaml')):
+            try:
+                values.append(approved_config(path.stem, {}, registry).model_dump())
+            except (OSError, ValueError, yaml.YAMLError):
+                continue
+        return values
 
     @app.post('/jobs', status_code=201, dependencies=[Depends(auth)])
     def submit(body: Submission):

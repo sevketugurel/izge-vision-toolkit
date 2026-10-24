@@ -115,3 +115,14 @@ def test_recovered_checkpoint_can_resume(tmp_path):
         assert client.post(f'/jobs/{job_id}/resume').status_code == 200
         assert wait(client, job_id, {'completed', 'failed'})['status'] == 'completed'
     assert json.loads((root / job_id / 'status.json').read_text())['mlflow_run_id'] == original_id
+
+
+def test_catalog_uses_runner_allowlist_and_requires_auth(runner):
+    client, _, _, registry = runner
+    (registry / 'invalid.yaml').write_text('command: sh')
+    (registry / 'malformed.yaml').write_text('invalid: [')
+    assert client.get('/configs', headers={'Authorization': 'Bearer wrong'}).status_code == 401
+    rows = client.get('/configs').json()
+    assert {r['name'] for r in rows} == {'smoke', 'long', 'timeout'}
+    assert all(r['eval']['split'] == 'val' for r in rows)
+    assert all(r['budget']['max_epochs'] >= r['params']['epochs'] for r in rows)

@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef, type FormEvent } from "react";
 import { createRoot } from "react-dom/client";
 import "./style.css";
+import { ControlCenter } from "./control-center";
 import { request, type Row } from "./api";
 import { FeedingPage, CropPreviewPage, LabelingPage, ConfigSelect, RecordedAtField } from "./feeding";
 const sections = [
@@ -13,6 +14,7 @@ const sections = [
   "Yemde süresi",
   "Kesit önizleme",
   "Etiketleme",
+  "Kontrol merkezi",
 ];
 const labels: Row = {
   standing: "Ayakta",
@@ -242,7 +244,7 @@ function App() {
               className={page === i ? "active" : ""}
               onClick={() => setPage(i)}
             >
-              <span>{["◫", "⌘", "▷", "◎", "⚑", "✓", "▤", "▣", "⌨"][i]}</span>
+              <span>{["◫", "⌘", "▷", "◎", "⚑", "✓", "▤", "▣", "⌨", "⚙"][i]}</span>
               {title}
             </button>
           ))}
@@ -304,7 +306,7 @@ function App() {
             İşlem sürüyor…
           </div>
         )}
-        {!loaded ? (
+        {page === 9 ? <ControlCenter /> : !loaded ? (
           <div className="empty">İşletmeler yükleniyor…</div>
         ) : !farm ? (
           <section className="card welcome">
