@@ -14,6 +14,15 @@ artifacts/
 .test-media/
 test-results/
 data/
+# Raw local media and labels belong under IZGE_DATA_ROOT, never in git.
+*.mp4
+*.MP4
+*.mkv
+*.dav
+*.avi
+*.mov
+*.h264
+datasets-local/
 *.safetensors
 *.pt
 *.pth
