@@ -1,0 +1,15 @@
+name: smoke
+kind: smoke
+dataset:
+  manifest: generated/smoke-v1
+  version: generated-smoke-v1
+params:
+  epochs: 3
+  learning_rate: 0.1
+budget:
+  max_wall_minutes: 3
+  max_epochs: 100
+device: auto
+seed: 42
+eval:
+  split: val
