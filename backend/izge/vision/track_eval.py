@@ -3,6 +3,7 @@
 Boxes are xyxy per frame. Matching keeps the previous correspondence when it still overlaps
 (as in CLEAR-MOT) so an identity switch is only counted when the match really changes.
 """
+import math
 from collections import defaultdict
 
 import numpy as np
@@ -158,6 +159,8 @@ def evaluate_hota(truth: list[dict], predicted: list[dict], alphas: tuple[float,
             'hota_at': {str(a): float(np.sqrt(d * s)) for a, d, s in zip(alphas, det, ass, strict=True)},
             'gt_boxes': gt_total, 'pred_boxes': pr_total, 'alphas': list(alphas)}
 
+MAX_MOT_FRAME = 1_000_000  # ~9 h at 30 fps; bounds the dense per-frame list built by load_mot_file
+
 
 def load_mot_file(path, is_truth: bool, num_frames: int | None = None) -> list[dict]:
     """Read a MOTChallenge txt (`frame,id,x,y,w,h,conf,...`, frame 1-based, xywh) into per-frame xyxy dicts.
@@ -174,13 +177,18 @@ def load_mot_file(path, is_truth: bool, num_frames: int | None = None) -> list[d
             if len(parts) < 6:
                 raise ValueError(f'{path}:{n}: expected at least 6 comma-separated fields')
             try:
-                frame, oid = int(float(parts[0])), int(float(parts[1]))
-                x, y, w, h = (float(v) for v in parts[2:6])
+                numbers = [float(v) for v in parts[:6]]
                 conf = float(parts[6]) if len(parts) > 6 and parts[6].strip() else 1.0
             except ValueError as exc:
                 raise ValueError(f'{path}:{n}: non-numeric field') from exc
+            if not all(math.isfinite(v) for v in (*numbers, conf)):
+                raise ValueError(f'{path}:{n}: non-finite value (nan/inf) is not allowed')
+            frame, oid = int(numbers[0]), int(numbers[1])
+            x, y, w, h = numbers[2:6]
             if frame < 1:
                 raise ValueError(f'{path}:{n}: frame numbers start at 1')
+            if frame > MAX_MOT_FRAME:
+                raise ValueError(f'{path}:{n}: frame {frame} exceeds the {MAX_MOT_FRAME} frame limit')
             if w <= 0 or h <= 0:
                 raise ValueError(f'{path}:{n}: box width/height must be positive')
             last = max(last, frame)

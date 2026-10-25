@@ -93,6 +93,21 @@ def test_loader_rejects_bad_rows(tmp_path):
         load_mot_file(bad, is_truth=False)
 
 
+@pytest.mark.parametrize('bad_value', ['nan', 'inf', '-inf'])
+def test_loader_rejects_non_finite_values(tmp_path, bad_value):
+    bad = tmp_path / 'bad.txt'
+    bad.write_text(f'1,1,{bad_value},0,10,10,1\n1,2,0,0,{bad_value},10,1\n', encoding='utf-8')
+    with pytest.raises(ValueError, match='non-finite'):
+        load_mot_file(bad, is_truth=False)
+
+
+def test_loader_caps_frame_number(tmp_path):
+    bad = tmp_path / 'bad.txt'
+    write_mot(bad, [(50_000_000, 1, 0, 0, 10, 10)])
+    with pytest.raises(ValueError, match='frame limit'):
+        load_mot_file(bad, is_truth=False)
+
+
 def test_cli_labels_origin(tmp_path):
     gt = tmp_path / 'gt.txt'
     write_mot(gt, [(f, 1, 10 + 2 * f, 50, 30, 30, 1) for f in range(1, 6)])
