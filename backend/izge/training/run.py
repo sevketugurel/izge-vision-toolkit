@@ -24,6 +24,23 @@ def append_json(path, value):
         stream.write(json.dumps(value, allow_nan=False) + '\n')
 
 
+def tracking_uri(runs_root):
+    tracking = os.getenv('MLFLOW_TRACKING_URI', (runs_root / 'mlruns').as_uri())
+    if tracking.startswith('file:'):
+        os.environ.setdefault('MLFLOW_ALLOW_FILE_STORE', 'true')
+    return tracking
+
+
+def log_run_artifacts(client, run_id, run_dir):
+    for name in ('status.json', 'metrics.jsonl', 'resources.jsonl', 'train.log', 'process.log',
+                 'checkpoints', 'rfdetr'):
+        path = run_dir / name
+        if path.is_dir():
+            client.log_artifacts(run_id, str(path), artifact_path=name)
+        elif path.exists():
+            client.log_artifact(run_id, str(path))
+
+
 @contextmanager
 def monitor_resources(run_dir, device):
     import psutil
@@ -132,9 +149,7 @@ def execute(config_path: Path, run_dir: Path, resume=False):
         torch.manual_seed(config.seed)
         status.update(device=device, config_sha256=fingerprint, infrastructure_smoke=config.kind == 'smoke')
         runs_root = Path(os.getenv('IZGE_RUNS_ROOT', Path.home() / '.izge-runner/runs')).resolve()
-        tracking = os.getenv('MLFLOW_TRACKING_URI', (runs_root / 'mlruns').as_uri())
-        if tracking.startswith('file:'):
-            os.environ.setdefault('MLFLOW_ALLOW_FILE_STORE', 'true')
+        tracking = tracking_uri(runs_root)
         mlflow.set_tracking_uri(tracking)
         mlflow.set_experiment('izge-training-infrastructure')
         old_id = old.get('mlflow_run_id') if resume else None
@@ -157,12 +172,7 @@ def execute(config_path: Path, run_dir: Path, resume=False):
                 (feeding if config.kind == 'feeding_linear' else rfdetr)(config, run_dir, resume, emit)
             status['status'] = 'completed'
             write_json(previous, status)
-            for name in ('status.json', 'metrics.jsonl', 'resources.jsonl', 'train.log', 'checkpoints', 'rfdetr'):
-                path = run_dir / name
-                if path.is_dir():
-                    mlflow.log_artifacts(str(path), artifact_path=name)
-                elif path.exists():
-                    mlflow.log_artifact(str(path))
+            log_run_artifacts(mlflow.MlflowClient(tracking_uri=tracking), tracked.info.run_id, run_dir)
         return 0
     except Exception as exc:
         # Exception text can contain provider credentials. Persist only a stable type and safe local validation errors.

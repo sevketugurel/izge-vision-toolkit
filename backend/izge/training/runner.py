@@ -24,7 +24,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import Field
 
 from .config import ROOT, StrictModel, approved_config
-from .run import pick_device, write_json
+from .run import log_run_artifacts, pick_device, tracking_uri, write_json
 
 
 class Submission(StrictModel):
@@ -66,6 +66,7 @@ class JobStore:
                     process = psutil.Process(row['pid'])
                     if process.create_time() == row['process_started'] and os.getpgid(process.pid) == process.pid:
                         os.killpg(process.pid, signal.SIGKILL)
+                        process.wait(timeout=10)
                 except (psutil.Error, ProcessLookupError, TypeError):
                     pass
                 self.terminal_file(row['id'], 'interrupted')
@@ -107,6 +108,14 @@ class JobStore:
         path = self.root / job_id / 'status.json'
         data = json.loads(path.read_text()) if path.exists() else {}
         write_json(path, {**data, 'status': state})
+        if state in ('cancelled', 'timed_out', 'interrupted') and data.get('mlflow_run_id'):
+            from mlflow import MlflowClient
+            client = MlflowClient(tracking_uri=tracking_uri(self.root))
+            run_id = data['mlflow_run_id']
+            try:
+                log_run_artifacts(client, run_id, path.parent)
+            finally:
+                client.set_terminated(run_id, status='KILLED')
 
 
 def create_app(root=None, token_path=None, registry=None):
@@ -135,11 +144,11 @@ def create_app(root=None, token_path=None, registry=None):
             except asyncio.CancelledError:
                 pass
             if current_id:
-                app.state.store.update(current_id, 'interrupted')
                 app.state.store.terminal_file(current_id, 'interrupted')
+                app.state.store.update(current_id, 'interrupted')
             app.state.store.lock.close()
 
-    app = FastAPI(lifespan=lifespan)
+    app = FastAPI(lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
 
     def auth(credentials: HTTPAuthorizationCredentials | None = Depends(bearer)):
         if not credentials or not hmac.compare_digest(credentials.credentials, app.state.token):
@@ -193,14 +202,14 @@ def create_app(root=None, token_path=None, registry=None):
                         await asyncio.sleep(0.05)
                     await asyncio.to_thread(process.wait)
                     state = stop_reason or ('completed' if process.returncode == 0 else 'failed')
-                    store.update(current_id, state)
                     store.terminal_file(current_id, state)
+                    store.update(current_id, state)
             except asyncio.CancelledError:
                 if process and process.poll() is None:
                     kill(process)
                     await asyncio.to_thread(process.wait)
-                store.update(current_id, 'interrupted')
                 store.terminal_file(current_id, 'interrupted')
+                store.update(current_id, 'interrupted')
                 raise
             except (OSError, psutil.Error):
                 if process and process.poll() is None:
@@ -246,9 +255,16 @@ def create_app(root=None, token_path=None, registry=None):
         return public(store.get(job_id))
 
     def public(row):
-        return dict(id=row['id'], status=row['state'], config=json.loads(row['config']),
+        config = json.loads(row['config'])
+        directory = root / row['id']
+        if config['kind'] == 'rfdetr_detect':
+            from .adapters import rfdetr_checkpoint
+            checkpoint = rfdetr_checkpoint(directory)
+        else:
+            checkpoint = directory / 'checkpoints/last.pt'
+        return dict(id=row['id'], status=row['state'], config=config,
                     created=row['created'], resume_available=row['state'] in ('interrupted', 'cancelled', 'timed_out', 'failed')
-                    and (root / row['id'] / 'checkpoints/last.pt').is_file())
+                    and checkpoint is not None and checkpoint.is_file())
 
     @app.get('/jobs', dependencies=[Depends(auth)])
     def listing():
