@@ -56,6 +56,11 @@ def feeding(config, run_dir, resume, emit):
               duration_s=time.monotonic() - start))
 
 
+def rfdetr_checkpoint(run_dir):
+    checkpoints = [path for path in (run_dir / 'rfdetr').glob('checkpoint_*.ckpt') if path.is_file()]
+    return max(checkpoints, key=os.path.getmtime, default=None)
+
+
 def rfdetr(config, run_dir, resume, emit):
     manifest = load_manifest(config)
     if platform.system() != 'Linux' or platform.machine() != 'x86_64':
@@ -74,16 +79,16 @@ def rfdetr(config, run_dir, resume, emit):
                '--batch-size', str(config.params.batch_size), '--grad-accum-steps',
                str(config.params.grad_accum_steps), '--allow-training']
     if resume:
-        checkpoints = sorted((run_dir / 'rfdetr').glob('checkpoint_*.ckpt'), key=os.path.getmtime)
-        if not checkpoints:
+        checkpoint = rfdetr_checkpoint(run_dir)
+        if checkpoint is None:
             raise TrainingPrerequisiteError('full RF-DETR optimizer checkpoint missing')
-        command += ['--resume', str(checkpoints[-1])]
+        command += ['--resume', str(checkpoint)]
     # Inherit process group so the runner kills the entire tree. Test split remains disabled.
     subprocess.run(command, check=True)
     # Preserve native full-state resume checkpoints and inference-best weights.
-    checkpoints = sorted((run_dir / 'rfdetr').glob('checkpoint_*.ckpt'), key=os.path.getmtime)
-    if checkpoints:
-        shutil.copyfile(checkpoints[-1], run_dir / 'checkpoints/last.pt')
+    checkpoint = rfdetr_checkpoint(run_dir)
+    if checkpoint is not None:
+        shutil.copyfile(checkpoint, run_dir / 'checkpoints/last.pt')
     best = run_dir / 'rfdetr/checkpoint_best_total.pth'
     if best.is_file():
         shutil.copyfile(best, run_dir / 'checkpoints/best.pt')

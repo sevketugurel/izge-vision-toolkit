@@ -51,7 +51,8 @@ python -m izge.training.client cancel JOB_ID
 python -m izge.training.client resume JOB_ID
 ```
 
-Bütün uçlar bearer token ister. Reçeteler `config/training/approved/*.yaml` içinde
+Bütün uçlar bearer token ister; `/docs`, `/redoc`, `/openapi.json` kapalıdır.
+Reçeteler `config/training/approved/*.yaml` içinde
 operatör tarafından yönetilir (`IZGE_TRAINING_CONFIG_ROOT` isteğe bağlı). İstemci komut,
 manifest, ağırlık yolu, tracking adresi veya bütçe değiştiremez. Override listesi:
 `params.epochs`, `params.learning_rate`, `params.c`, `params.batch_size`,
@@ -66,6 +67,11 @@ bir runner süreci çalışır (dosya kilidi); aynı anda bir eğitim subprocess
 olur; restart sırasında PID/creation-time doğrulanarak eski süreç öldürülür ve
 running kayıtlar interrupted yapılır. Kuyruktaki işler korunur. `resume` yalnız
 checkpoint bulunan terminal işte mümkündür; aynı config ve MLflow run id kullanılır.
+İptal, timeout, kapanış ve restart recovery sonrasında runner mevcut artifact'ları
+MLflow'a yükler ve run durumunu `KILLED` yapar; henüz MLflow run'ı başlamamış iş için
+yeni bir run oluşturmaz. RF-DETR resume kapısı ve adaptörü aynı doğal
+`rfdetr/checkpoint_*.ckpt` dosyasını seçer. Eğitim subprocess'i sonlanmadan önce
+oluşan bu checkpoint yeterlidir; normalize `checkpoints/last.pt` kopyası beklenmez.
 
 Her smoke epoch'u loss, macro precision/recall/F1, süre, CPU/RAM ve MPS bellek
 ölçümleri yazar. `status.json`, `metrics.jsonl`, `resources.jsonl`, `train.log`,
