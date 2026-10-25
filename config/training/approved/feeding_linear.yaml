@@ -1,0 +1,15 @@
+name: feeding_linear
+kind: feeding_linear
+dataset:
+  manifest: manifests/feeding/v1/manifest.json
+  version: v1
+params:
+  epochs: 1
+  c: 1
+budget:
+  max_wall_minutes: 30
+  max_epochs: 1
+device: cpu
+seed: 42
+eval:
+  split: val

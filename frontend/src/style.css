@@ -133,6 +133,7 @@ aside {
   color: #eff7ed;
   position: fixed;
   inset: 0 auto 0 0;
+  overflow-y: auto;
   padding: 34px 22px;
   display: flex;
   flex-direction: column;
@@ -891,3 +892,12 @@ label.inline {
 label.inline input {
   width: auto;
 }
+
+.control-center .card { margin-bottom: 20px; }
+.control-center pre { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 300px; overflow: auto; }
+.control-table { overflow-x: auto; }
+.control-center article { margin-top: 20px; }
+.control-center h3 { margin-top: 20px; }
+.control-center li { margin: 10px 0; overflow-wrap: anywhere; }
+
+.control-center p, .control-center .muted, .control-center th { color: #52685b; }
