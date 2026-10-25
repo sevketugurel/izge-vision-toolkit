@@ -91,7 +91,9 @@ def write_manifest(value: dict, dataset: str, version: str) -> Path:
         raise ValueError('Dataset/version must be a single directory name')
     path = Path(value['root']) / 'manifests' / dataset / version / 'manifest.json'
     path.parent.mkdir(parents=True, exist_ok=True)
-    write_json(path, value)
+    # The native training runner compares this immutable dataset version with its
+    # approved recipe before it gives an adapter any paths.
+    write_json(path, {**value, 'version': version})
     return path
 
 
@@ -100,6 +102,8 @@ def load_manifest(path: Path, *, final_eval: bool = False, split: str | None = N
     value = json.loads(Path(path).read_text())
     if value.get('schema_version') != 'izge-dataset-1' or value.get('sealed_test') is not True:
         raise ValueError('Sealed versioned dataset required')
+    if not isinstance(value.get('version'), str) or not value['version']:
+        raise ValueError('Dataset version required')
     if value['config_hash'] != config_hash(value['config']):
         raise ValueError('Config hash mismatch')
     check_leakage(value['items'], value['sources'])
