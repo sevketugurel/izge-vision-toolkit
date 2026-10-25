@@ -1,0 +1,15 @@
+name: rfdetr_detect
+kind: rfdetr_detect
+dataset:
+  manifest: manifests/rfdetr/v1/manifest.json
+  version: v1
+params:
+  epochs: 20
+  weights: weights/seg-small.pth
+budget:
+  max_wall_minutes: 240
+  max_epochs: 20
+device: cuda
+seed: 42
+eval:
+  split: val

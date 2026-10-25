@@ -1,6 +1,12 @@
 import React, { useEffect, useState, useRef, type FormEvent } from "react";
 import { createRoot } from "react-dom/client";
 import "./style.css";
+import { ControlCenter } from "./control-center";
+import { AdminML } from "./admin-ml";
+import { AdminProject } from "./admin-project";
+import { AdminOperations } from "./admin-operations";
+import { AdminMonitoring } from "./admin-monitoring";
+import "./admin.css";
 import { request, type Row } from "./api";
 import { FeedingPage, CropPreviewPage, LabelingPage, ConfigSelect, RecordedAtField } from "./feeding";
 const sections = [
@@ -13,6 +19,11 @@ const sections = [
   "Yemde süresi",
   "Kesit önizleme",
   "Etiketleme",
+  "Kontrol merkezi",
+  "ML deneyleri",
+  "Proje yönetimi",
+  "Ajan operasyonları",
+  "Saha izleme",
 ];
 const labels: Row = {
   standing: "Ayakta",
@@ -213,7 +224,7 @@ function App() {
   };
   const animal = report?.animals.find((a: Row) => a.animal_id === animalId);
   return (
-    <div className="shell">
+    <div className="shell" aria-busy={!loaded}>
       <aside>
         <div className="brand">
           <span className="brandmark">ı</span>
@@ -242,7 +253,26 @@ function App() {
               className={page === i ? "active" : ""}
               onClick={() => setPage(i)}
             >
-              <span>{["◫", "⌘", "▷", "◎", "⚑", "✓", "▤", "▣", "⌨"][i]}</span>
+              <span>
+                {
+                  [
+                    "◫",
+                    "⌘",
+                    "▷",
+                    "◎",
+                    "⚑",
+                    "✓",
+                    "▤",
+                    "▣",
+                    "⌨",
+                    "⚙",
+                    "◈",
+                    "▦",
+                    "⌁",
+                    "◉",
+                  ][i]
+                }
+              </span>
               {title}
             </button>
           ))}
@@ -304,7 +334,17 @@ function App() {
             İşlem sürüyor…
           </div>
         )}
-        {!loaded ? (
+        {page === 10 ? (
+          <AdminML />
+        ) : page === 11 ? (
+          <AdminProject />
+        ) : page === 12 ? (
+          <AdminOperations />
+        ) : page === 13 ? (
+          <AdminMonitoring farm={farm} />
+        ) : page === 9 ? (
+          <ControlCenter />
+        ) : !loaded ? (
           <div className="empty">İşletmeler yükleniyor…</div>
         ) : !farm ? (
           <section className="card welcome">

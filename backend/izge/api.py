@@ -10,6 +10,8 @@ from typing import Literal
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Form
 from fastapi.responses import FileResponse, JSONResponse, Response
+from fastapi.exceptions import RequestValidationError
+from fastapi.exception_handlers import request_validation_exception_handler
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field, AwareDatetime, field_validator
 from sqlalchemy import select, update, delete, func
@@ -26,6 +28,8 @@ from .storage import object_store
 from .reporting import daily_report
 from .feeding import camera_config
 from .feeding_api import router as feeding_router
+from .control_center import router as control_router
+from .admin_api import router as admin_router
 
 app = FastAPI(title=APP_NAME, version='0.1.0')
 
@@ -55,6 +59,14 @@ class UploadLimit:
 
 app.add_middleware(UploadLimit)
 app.include_router(feeding_router)
+app.include_router(control_router)
+app.include_router(admin_router)
+
+@app.exception_handler(RequestValidationError)
+async def input_error(request, exc):
+    if request.url.path.startswith(('/api/control/', '/api/admin/')):
+        return JSONResponse(status_code=422, content={'detail': 'Kontrol merkezi isteği geçersiz'})
+    return await request_validation_exception_handler(request, exc)
 
 @app.exception_handler(IntegrityError)
 async def integrity_error(request, exc):
