@@ -154,6 +154,12 @@ def create_app(root=None, token_path=None, registry=None):
             raise HTTPException(401, 'invalid bearer token', headers={'WWW-Authenticate': 'Bearer'})
 
     def kill(child):
+        # Cancel, the worker loop and shutdown can each ask for the same child. SIGKILL cannot be
+        # caught, so one per group is enough, and a repeat can fail: macOS answers killpg with EPERM
+        # while the group's only member is exiting or a zombie.
+        if getattr(child, 'sigkill_sent', False):
+            return
+        child.sigkill_sent = True
         try:
             os.killpg(child.pid, signal.SIGKILL)
         except ProcessLookupError:

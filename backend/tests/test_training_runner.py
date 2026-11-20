@@ -1,7 +1,10 @@
+import errno
 import json
+import os
 from pathlib import Path
 import sqlite3
 import subprocess
+import threading
 import time
 
 from fastapi.testclient import TestClient
@@ -191,6 +194,38 @@ def test_cancel_timeout_and_queue(runner):
     timeout = client.post('/jobs', json={'config_name': 'timeout'}).json()['id']
     assert wait(client, timeout, {'timed_out'})['status'] == 'timed_out'
     print(f'cancel transcript: {first}=cancelled; queued {second}=cancelled; {timeout}=timed_out')
+
+
+@pytest.mark.parametrize('after_cancel', ['wait', 'shutdown'])
+def test_cancel_signals_the_process_group_once(tmp_path, monkeypatch, after_cancel):
+    # macOS answers killpg with EPERM while the group's only member is exiting or a zombie, so a
+    # second SIGKILL to a dying group crashed the worker now and then. Emulate that window: the
+    # first signal lands after a delay and any repeat to the same group raises EPERM.
+    real_killpg, calls = os.killpg, []
+
+    def killpg(pgid, sig):
+        calls.append(pgid)
+        if calls.count(pgid) > 1:
+            raise PermissionError(errno.EPERM, 'Operation not permitted')
+        threading.Timer(0.3, real_killpg, (pgid, sig)).start()
+
+    monkeypatch.setattr(os, 'killpg', killpg)
+    registry = tmp_path / 'approved'
+    registry.mkdir()
+    config = approved_config('smoke', {'device': 'cpu'}).model_dump()
+    config.update(name='long')
+    config['params']['epochs'] = 100
+    config['budget']['max_wall_minutes'] = 3
+    (registry / 'long.yaml').write_text(json.dumps(config))
+    root, token = tmp_path / 'runs', tmp_path / 'token'
+    with TestClient(create_app(root, token, registry)) as client:
+        client.headers['Authorization'] = f'Bearer {token.read_text()}'
+        job_id = client.post('/jobs', json={'config_name': 'long'}).json()['id']
+        wait(client, job_id, {'running'})
+        client.post(f'/jobs/{job_id}/cancel')
+        if after_cancel == 'wait':
+            assert wait(client, job_id, {'cancelled'}, seconds=10)['status'] == 'cancelled'
+    assert len(calls) == 1
 
 
 def test_interrupted_recovery_and_exclusive_lock(tmp_path):
