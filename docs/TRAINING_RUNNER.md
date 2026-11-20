@@ -83,10 +83,14 @@ Tatbikatı küçük bir sentetik CPU işiyle ve özel notebook sürümleriyle y�
 Birinci aşama dosyanın oturumlar arasında korunmasını sınar. T4 üzerinde gerçek
 RF-DETR eğitim durumunun geri yüklenmesi ayrı doğrulama gerektirir.
 
-1. Sabit seed ile küçük model, optimizer ve scheduler kullanın. Tamamlanan her epoch'ta
-   tam Lightning checkpoint'ini `/kaggle/working/rfdetr/` altına yazın. Ayrı bir
-   manifestte epoch, global adım, SHA-256 ve sonraki örnek kimliğini kaydedin.
-   Kesintisiz kontrol koşusunun sonraki güncellemesini karşılaştırma için saklayın.
+1. Sabit seed ile küçük model, optimizer ve scheduler kullanın. Örnek sırası yalnız
+   seed ve epoch'a bağlı olsun; `set_epoch` ile her epoch yeniden tohumlanan bir
+   örnekleyici yeterlidir. Lightning checkpoint'i RNG durumu taşımaz. Kalıcı ya da
+   global üreteçle karıştıran işte devam eden koşu, kalan epoch'ları başka sırayla görür.
+   Tamamlanan her epoch'ta tam Lightning checkpoint'ini `/kaggle/working/rfdetr/`
+   altına yazın. Ayrı bir manifestte epoch, global adım, SHA-256 ve sonraki örnek
+   kimliğini kaydedin. Kesintisiz kontrol koşusunun sonraki güncellemesini
+   karşılaştırma için saklayın.
 2. Aynı işi ayrı sürümlerde üç sonlanma biçimiyle deneyin. İlkinde notebook içinde
    monoton saatle kısa bir son tarih belirleyin. Yeni epoch'a başlamadan, kalan
    süre bir epoch ve kayıt/yükleme payından azsa doğrulanmış checkpoint ile normal
@@ -98,11 +102,33 @@ RF-DETR eğitim durumunun geri yüklenmesi ayrı doğrulama gerektirir.
    checkpoint'leri yazılabilir yeni iş dizinine kopyalayıp seçiciyi çalıştırın.
    Seçilen epoch, optimizer adımı, LR, sıradaki örnek ve ilk güncellemenin sonucu
    kesintisiz CPU kontrolüyle eşleşmeli. Çıktı kayıpsa o bitiş biçimini başarısız kaydedin.
+   Bu birebir eşleşme 1. adımdaki örnek sırasına dayanır. RF-DETR veriyi karıştırır
+   (`RandomSampler`, `shuffle=True`) ve üreteç durumunu kaydetmez. Gerçek eğitimde ölçüt,
+   devam noktasında model, optimizer, scheduler, epoch ve adımın seçilen checkpoint'le
+   aynı olması ve sonraki epoch arşivinin geçerli yazılmasıdır.
 4. İptal veya zaman aşımı son checkpoint'i kaybettiriyorsa uzun eğitimde epoch
    sonunda ayrıca yetkili, kalıcı bir hedefe sürümlü kopya yazıp doğrulayın.
    Yeniden başlatma tatbikatını bu hedefle tekrarlayın. Çekirdeğin içinde son
    tarih, son başarılı kalıcı kayıt ve sonlu loss denetimleri çalışmalı; karar
    kaydı da checkpoint ile aynı kalıcı hedefte bulunmalıdır.
+
+Bilinen sınırlar:
+
+- İptal, zaman aşımı ve kapanışta runner süreç grubuna bir kez SIGKILL gönderir.
+  macOS, üyesi ölmekte ya da zombi olan gruba ikinci sinyali EPERM ile reddeder.
+  Arşiv yalnız epoch sonunda yazıldığından yaklaşık bir epoch'luk iş kaybolabilir.
+  Epoch süresi kabul edilen kayıptan uzunsa adım ya da süre aralıklı ek checkpoint gerekir.
+- Lightning arşivi geçici dosyaya yazıp yerine taşır. Geçici dizin başka dosya
+  sistemindeyse taşıma kopyalamaya döner. Böyle bir kopya ya da oturumlar arası
+  aktarım yarıda kalırsa kesik dosyayı seçici atlar.
+- rfdetr arşivleri `save_top_k=-1` ile tutar. `checkpoint_interval=1` ile her epoch
+  tam bir checkpoint ekler. Dosya boyutunu tatbikatta ölçüp Kaggle çıktı alanıyla
+  karşılaştırın.
+- Seçici yeni ya da değişmiş bir arşivi ilk incelemede CPU belleğine tamamen yükler.
+  Sonuç dosya imzasıyla önbelleğe alınır.
+- `backend/tests/test_training_lightning_resume.py` seçiciyi ve devamı Lightning'in
+  kendi yazdığı arşivlerle sınar. Backend ortamında pytorch-lightning olmadığından
+  varsayılan koşuda atlanır. Komut dosyanın başındadır.
 
 Her smoke epoch'u loss, macro precision/recall/F1, süre, CPU/RAM ve MPS bellek
 ölçümleri yazar. `status.json`, `metrics.jsonl`, `resources.jsonl`, `train.log`,
