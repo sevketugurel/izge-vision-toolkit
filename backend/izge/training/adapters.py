@@ -1,6 +1,9 @@
 """Adapters preserve the existing classifier and guarded RF-DETR recipe."""
-import os
+from functools import lru_cache
+import pickle
 import platform
+import re
+import struct
 import subprocess
 import shutil
 import time
@@ -56,9 +59,46 @@ def feeding(config, run_dir, resume, emit):
               duration_s=time.monotonic() - start))
 
 
+@lru_cache(maxsize=128)
+def _valid_rfdetr_checkpoint(path, epoch, file_signature):
+    """Cache just the verdict for this file revision, never its tensors."""
+    import torch
+
+    try:
+        state = torch.load(path, map_location='cpu', weights_only=True)
+    except (EOFError, pickle.UnpicklingError, struct.error, RuntimeError, ValueError, IndexError, KeyError):
+        return False
+    if not isinstance(state, dict) or type(state.get('epoch')) is not int or state['epoch'] != epoch:
+        return False
+    optimizers = state.get('optimizer_states')
+    return (
+        isinstance(state.get('state_dict'), dict) and bool(state['state_dict'])
+        and isinstance(optimizers, list) and bool(optimizers)
+        and all(isinstance(opt, dict) and isinstance(opt.get('state'), dict)
+                and opt.get('param_groups') for opt in optimizers)
+        and isinstance(state.get('global_step'), int)
+        and isinstance(state.get('loops'), dict) and 'fit_loop' in state['loops']
+        and isinstance(state.get('lr_schedulers'), list) and bool(state['lr_schedulers'])
+        and isinstance(state.get('pytorch-lightning_version'), str)
+    )
+
+
 def rfdetr_checkpoint(run_dir):
-    checkpoints = [path for path in (run_dir / 'rfdetr').glob('checkpoint_*.ckpt') if path.is_file()]
-    return max(checkpoints, key=os.path.getmtime, default=None)
+    candidates = []
+    for path in (run_dir / 'rfdetr').glob('checkpoint_*.ckpt'):
+        match = re.fullmatch(r'checkpoint_([0-9]+)\.ckpt', path.name)
+        if match and path.is_file():
+            candidates.append((int(match[1]), path))
+    for epoch, path in sorted(candidates, reverse=True):
+        try:
+            info = path.stat()
+            signature = (info.st_ino, info.st_size, info.st_mtime_ns, info.st_ctime_ns)
+            if _valid_rfdetr_checkpoint(path, epoch, signature):
+                return path
+        except OSError:
+            # The file can disappear or become unreadable between listing and loading.
+            continue
+    return None
 
 
 def rfdetr(config, run_dir, resume, emit):
