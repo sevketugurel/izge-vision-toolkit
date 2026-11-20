@@ -93,7 +93,7 @@ def test_docs_routes_are_disabled(runner):
 
 
 @pytest.mark.parametrize('native_checkpoint', [True, False])
-def test_recovered_rfdetr_uses_native_checkpoint(tmp_path, monkeypatch, native_checkpoint):
+def test_recovered_rfdetr_uses_native_checkpoint(tmp_path, monkeypatch, native_checkpoint, save_epoch_checkpoint):
     from mlflow import MlflowClient
     from izge.training.run import write_json
     monkeypatch.setenv('MLFLOW_ALLOW_FILE_STORE', 'true')
@@ -103,8 +103,9 @@ def test_recovered_rfdetr_uses_native_checkpoint(tmp_path, monkeypatch, native_c
     directory = root / 'orphan'
     (directory / 'rfdetr').mkdir(parents=True)
     (directory / 'checkpoints').mkdir()
+    (directory / 'rfdetr/checkpoint_1.ckpt').write_bytes(b'incomplete')
     if native_checkpoint:
-        (directory / 'rfdetr/checkpoint_0.ckpt').write_bytes(b'native-checkpoint-fixture')
+        save_epoch_checkpoint(directory / 'rfdetr/checkpoint_0.ckpt', 0)
         (directory / 'checkpoints/best.pt').write_bytes(b'inference-weights-fixture')
     else:
         # A normalized copy alone cannot resume the RF-DETR adapter.

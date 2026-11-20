@@ -136,8 +136,7 @@ def create_app(root=None, token_path=None, registry=None):
             yield
         finally:
             stop_reason = 'interrupted'
-            if process and process.poll() is None:
-                kill(process)
+            # The worker owns process-group termination and reaping on cancellation.
             task.cancel()
             try:
                 await task
@@ -257,13 +256,14 @@ def create_app(root=None, token_path=None, registry=None):
     def public(row):
         config = json.loads(row['config'])
         directory = root / row['id']
-        if config['kind'] == 'rfdetr_detect':
+        resumable = row['state'] in ('interrupted', 'cancelled', 'timed_out', 'failed')
+        if resumable and config['kind'] == 'rfdetr_detect':
             from .adapters import rfdetr_checkpoint
             checkpoint = rfdetr_checkpoint(directory)
         else:
             checkpoint = directory / 'checkpoints/last.pt'
         return dict(id=row['id'], status=row['state'], config=config,
-                    created=row['created'], resume_available=row['state'] in ('interrupted', 'cancelled', 'timed_out', 'failed')
+                    created=row['created'], resume_available=resumable
                     and checkpoint is not None and checkpoint.is_file())
 
     @app.get('/jobs', dependencies=[Depends(auth)])

@@ -70,8 +70,39 @@ checkpoint bulunan terminal işte mümkündür; aynı config ve MLflow run id ku
 İptal, timeout, kapanış ve restart recovery sonrasında runner mevcut artifact'ları
 MLflow'a yükler ve run durumunu `KILLED` yapar; henüz MLflow run'ı başlamamış iş için
 yeni bir run oluşturmaz. RF-DETR resume kapısı ve adaptörü aynı doğal
-`rfdetr/checkpoint_*.ckpt` dosyasını seçer. Eğitim subprocess'i sonlanmadan önce
-oluşan bu checkpoint yeterlidir; normalize `checkpoints/last.pt` kopyası beklenmez.
+`rfdetr/checkpoint_<epoch>.ckpt` dosyalarını epoch numarası azalan sırada inceler.
+CPU'da güvenli yükleme (`weights_only=True`) başarılı olmalı, içerideki epoch adla
+eşleşmeli ve Lightning eğitim durumu (model, optimizer, scheduler, adım ve fit döngüsü)
+bulunmalıdır. Okunamayan veya eksik kayıtta önceki epoch denenir. Geçerli kayıt
+bulunamazsa API devam seçeneğini kapatır. Başarılı koşu sonunda aynı seçici
+`checkpoints/last.pt` kopyasının kaynağını belirler.
+
+### Kaggle oturum kesintisi tatbikatı (tasarım)
+
+Tatbikatı küçük bir sentetik CPU işiyle ve özel notebook sürümleriyle yürütün.
+Birinci aşama dosyanın oturumlar arasında korunmasını sınar. T4 üzerinde gerçek
+RF-DETR eğitim durumunun geri yüklenmesi ayrı doğrulama gerektirir.
+
+1. Sabit seed ile küçük model, optimizer ve scheduler kullanın. Tamamlanan her epoch'ta
+   tam Lightning checkpoint'ini `/kaggle/working/rfdetr/` altına yazın. Ayrı bir
+   manifestte epoch, global adım, SHA-256 ve sonraki örnek kimliğini kaydedin.
+   Kesintisiz kontrol koşusunun sonraki güncellemesini karşılaştırma için saklayın.
+2. Aynı işi ayrı sürümlerde üç sonlanma biçimiyle deneyin. İlkinde notebook içinde
+   monoton saatle kısa bir son tarih belirleyin. Yeni epoch'a başlamadan, kalan
+   süre bir epoch ve kayıt/yükleme payından azsa doğrulanmış checkpoint ile normal
+   çıkın. İkincisinde kayıt sonrasında Kaggle üzerinden iptal edin. Üçüncüsünde
+   gerçek platform zaman aşımını sınayın. Kısa zaman bekçisi platform zaman aşımını
+   kanıtlamaz. Oturum süresi ve kalan kotayı koşu başında hesaptan kontrol edin.
+3. Her bitişten sonra **yeni** oturumda önceki sürümün çıktısını girdi olarak ekleyin.
+   Son görülen çıktı sürümünü, dosya varlığını ve SHA'yı kaydedin. Okunabilir
+   checkpoint'leri yazılabilir yeni iş dizinine kopyalayıp seçiciyi çalıştırın.
+   Seçilen epoch, optimizer adımı, LR, sıradaki örnek ve ilk güncellemenin sonucu
+   kesintisiz CPU kontrolüyle eşleşmeli. Çıktı kayıpsa o bitiş biçimini başarısız kaydedin.
+4. İptal veya zaman aşımı son checkpoint'i kaybettiriyorsa uzun eğitimde epoch
+   sonunda ayrıca yetkili, kalıcı bir hedefe sürümlü kopya yazıp doğrulayın.
+   Yeniden başlatma tatbikatını bu hedefle tekrarlayın. Çekirdeğin içinde son
+   tarih, son başarılı kalıcı kayıt ve sonlu loss denetimleri çalışmalı; karar
+   kaydı da checkpoint ile aynı kalıcı hedefte bulunmalıdır.
 
 Her smoke epoch'u loss, macro precision/recall/F1, süre, CPU/RAM ve MPS bellek
 ölçümleri yazar. `status.json`, `metrics.jsonl`, `resources.jsonl`, `train.log`,
