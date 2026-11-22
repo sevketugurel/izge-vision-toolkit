@@ -18,6 +18,9 @@ x-backend: &backend
     - hf:/data/hf
     - ./config/cameras:/app/config/cameras:ro
   init: true
+  # Hardening: the app needs no extra Linux capabilities and never escalates privileges.
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
 services:
   db:
     image: postgres:18.0-bookworm

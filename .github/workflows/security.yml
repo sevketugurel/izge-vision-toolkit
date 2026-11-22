@@ -46,7 +46,7 @@ jobs:
           python-version: "3.14"
       - name: Audit locked dependencies (including the ml extra)
         run: |
-          uv export --frozen --no-hashes --extra ml --no-emit-project -o requirements-audit.txt
+          uv export --frozen --no-hashes --extra ml --extra gcp --no-emit-project -o requirements-audit.txt
           uvx pip-audit==2.10.1 -r requirements-audit.txt --no-deps --disable-pip
 
   npm-audit:
