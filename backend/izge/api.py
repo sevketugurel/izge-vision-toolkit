@@ -30,6 +30,7 @@ from .feeding import camera_config
 from .feeding_api import router as feeding_router
 from .control_center import router as control_router
 from .admin_api import router as admin_router
+from .auth import ApiToken
 
 app = FastAPI(title=APP_NAME, version='0.1.0')
 
@@ -58,6 +59,7 @@ class UploadLimit:
         await self.app(scope, bounded_receive, send)
 
 app.add_middleware(UploadLimit)
+app.add_middleware(ApiToken)
 app.include_router(feeding_router)
 app.include_router(control_router)
 app.include_router(admin_router)

@@ -11,6 +11,8 @@ x-backend: &backend
     IZGE_CAMERA_CONFIG_DIRS: ${IZGE_CAMERA_CONFIG_DIRS:-/app/config/cameras}
     # Gated DINOv3 weights; leave empty to run without the real backbone (demo/labeling still work).
     HF_TOKEN: ${HF_TOKEN:-}
+    # Optional shared bearer token for /api/* (see SECURITY.md). Empty = guard off.
+    IZGE_API_TOKEN: ${IZGE_API_TOKEN:-}
   volumes:
     - media:/data/media
     - hf:/data/hf
