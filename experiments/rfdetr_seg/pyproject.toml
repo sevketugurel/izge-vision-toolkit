@@ -7,7 +7,7 @@ dependencies = [
   "rfdetr==1.11.2", "torch==2.14.1", "torchvision==0.29.1",
   "transformers==5.19.0", "numpy==2.5.4",
   "scipy==1.18.1",
-  "av==19.0.0", "pillow==12.3.0",
+  "av==19.0.0", "pillow==13.0.0",
   "pydantic==2.13.5", "pyyaml==6.0.3",
 ]
 
