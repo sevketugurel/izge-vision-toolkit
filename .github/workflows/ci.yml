@@ -83,7 +83,8 @@ jobs:
       - name: Integration tests
         run: |
           export MEDIA_ROOT="$(mktemp -d)"
-          uv run pytest -q -p no:cacheprovider backend/tests/test_integration.py
+          uv run pytest -q -p no:cacheprovider backend/tests/test_integration.py \
+            backend/tests/test_feeding_integration.py
 
   frontend:
     name: Frontend type-check and build
