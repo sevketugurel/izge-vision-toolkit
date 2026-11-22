@@ -7,6 +7,23 @@ import { AdminProject } from "./admin-project";
 import { AdminOperations } from "./admin-operations";
 import { AdminMonitoring } from "./admin-monitoring";
 import "./admin.css";
+
+// Keeps one page's render error from unmounting the whole app (sidebar included).
+class PageBoundary extends React.Component<{ children: React.ReactNode }, { error: string }> {
+  state = { error: "" };
+  static getDerivedStateFromError(e: Error) {
+    return { error: e.message || "Bilinmeyen hata" };
+  }
+  render() {
+    return this.state.error ? (
+      <div role="alert" className="alert">
+        Bu sayfa beklenmeyen bir yanıt nedeniyle gösterilemedi: {this.state.error}
+      </div>
+    ) : (
+      this.props.children
+    );
+  }
+}
 import { request, type Row } from "./api";
 import { FeedingPage, CropPreviewPage, LabelingPage, ConfigSelect, RecordedAtField } from "./feeding";
 const sections = [
@@ -335,15 +352,15 @@ function App() {
           </div>
         )}
         {page === 10 ? (
-          <AdminML />
+          <PageBoundary key={page}><AdminML /></PageBoundary>
         ) : page === 11 ? (
-          <AdminProject />
+          <PageBoundary key={page}><AdminProject /></PageBoundary>
         ) : page === 12 ? (
-          <AdminOperations />
+          <PageBoundary key={page}><AdminOperations /></PageBoundary>
         ) : page === 13 ? (
-          <AdminMonitoring farm={farm} />
+          <PageBoundary key={page}><AdminMonitoring farm={farm} /></PageBoundary>
         ) : page === 9 ? (
-          <ControlCenter />
+          <PageBoundary key={page}><ControlCenter /></PageBoundary>
         ) : !loaded ? (
           <div className="empty">İşletmeler yükleniyor…</div>
         ) : !farm ? (

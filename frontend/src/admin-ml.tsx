@@ -129,10 +129,15 @@ export function AdminML() {
     let active = true;
     request("/api/admin/experiments")
       .then((value) => {
-        if (active) {
-          setData(value);
-          setError("");
+        if (!active) return;
+        // An unexpected payload must show an error, not crash the whole app on `records.find`.
+        if (!value || !Array.isArray(value.records)) {
+          setData(null);
+          setError("Deney arşivi beklenmeyen biçimde döndü.");
+          return;
         }
+        setData(value);
+        setError("");
       })
       .catch((e) => {
         if (active) {

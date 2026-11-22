@@ -120,8 +120,8 @@ export function ControlCenter() {
             request(`${endpoint}/jobs`),
           ]);
           if (active) {
-            setConfigs(c);
-            setJobs(j.reverse());
+            setConfigs(Array.isArray(c) ? c : []);
+            setJobs(Array.isArray(j) ? j.reverse() : []);
             setError("");
           }
         } catch (e) {
@@ -150,10 +150,15 @@ export function ControlCenter() {
     let active = true;
     request(`${endpoint}/datasets`)
       .then((d) => {
-        if (active) {
-          setDataset(d);
-          setDatasetError("");
+        if (!active) return;
+        // Validate the shape: rendering `dataset.versions.length` on a bad payload unmounts the whole app.
+        if (!d || !Array.isArray(d.versions)) {
+          setDataset(null);
+          setDatasetError("Veri kümesi yanıtı beklenmeyen biçimde.");
+          return;
         }
+        setDataset(d);
+        setDatasetError("");
       })
       .catch((e) => {
         if (active) {
