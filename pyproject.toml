@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Saha video kayıtları ve insan incelemesi"
 requires-python = ">=3.14,<3.15"
 dependencies = [
-  "fastapi==0.143.0", "uvicorn==0.52.4", "pydantic==2.13.5",
+  "fastapi==0.143.0", "uvicorn==0.52.4", "pydantic==2.14.3",
   "sqlalchemy==2.0.44", "psycopg[binary]==3.2.12", "alembic==1.17.0",
   "av==19.0.0", "python-multipart==0.0.32",
   "numpy==2.5.4", "pyarrow==26.0.0", "pyyaml==6.0.3", "pillow==13.0.0", "scikit-learn==1.9.1", "scipy==1.18.1",
