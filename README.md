@@ -132,7 +132,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md). Security reports: [SECURITY.md](SECURITY
 
 ## Maintainers
 
-Created and maintained by Şevket Uğurel ([@sevketugurel](https://github.com/sevketugurel)), who authored about 99% of the commits. A large share of commits are co-authored with AI coding assistants (Claude, per commit trailers); all were reviewed and merged by the maintainer.
+Created and maintained by Sevket Ugurel ([@sevketugurel](https://github.com/sevketugurel)), who authored about 99% of the commits. A large share of commits are co-authored with AI coding assistants (Claude, per commit trailers); all were reviewed and merged by the maintainer.
 
 ## License
 
