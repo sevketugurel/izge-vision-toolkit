@@ -106,7 +106,7 @@ Kaynak kontrolleri yerleşim, renk karşıtlığı veya tarayıcı erişilebilir
 
 Tek token kaynağı [design/motion-tokens.json](design/motion-tokens.json) dosyasıdır.
 [React presetleri](frontend/src/motion/presets.ts) ve
-[vanilla JS presetleri](harness/core/src/agent_harness/status_assets/motion-presets.js)
+vanilla JS presetleri (`harness/`, yalnız özel depoda)
 bu JSON'u doğrudan okur; süre, easing, mesafe ve stagger değerlerini bileşenlerde
 yeniden tanımlamayın. Token süreleri ve stagger milisaniye, mesafeler pikseldir;
 React adaptörü `motion/react` için süreleri saniyeye çevirir.
@@ -130,7 +130,7 @@ React adaptörü `motion/react` için süreleri saniyeye çevirir.
   kayıt başlangıcı yardım metni ortak React varyantlarını kullanır.
 - **Yeni görünümde yasaklılar:** cam efekti (`backdrop-filter`,
   `-webkit-backdrop-filter`), `linear-gradient` ve `box-shadow`.
-  [Token koruma testleri](harness/core/tests/test_motion_tokens.py), yeni hareket
+  Token koruma testleri (`harness/core/tests/test_motion_tokens.py`, yalnız özel depoda), yeni hareket
   sabitlerini ve bu efektleri iki arayüz kaynak ağacında denetler. Testteki
   `LEGACY_MOTION` / `LEGACY_EFFECTS` listeleri mevcut satırlar için sayılı
   istisnalardır; yeni kullanımlara izin vermez ve tüm eski arayüzün taşındığı

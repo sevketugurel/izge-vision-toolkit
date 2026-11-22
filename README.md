@@ -131,7 +131,7 @@ Details: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) (Turkish) and [docs/oss-re
 - Most project documentation is in Turkish.
 - `main` is behind `develop` and several open pull requests.
 - Python 3.14 and recent dependency versions are pinned; older interpreters are unsupported. Node 22.18 or newer is required for the frontend.
-- The repository still contains an unrelated agent-orchestration subproject (`harness/`) and internal planning documents; see the OSS readiness audit.
+- The private development repository also contains an agent-orchestration tool (`harness/`, `panel/`). It is not part of the public release; the motion-token guard tests for `frontend/` currently live there, so the public tree does not run them.
 - Some code and documentation were written with AI assistance (see Maintainers).
 
 ## Roadmap

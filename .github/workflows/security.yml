@@ -61,4 +61,5 @@ jobs:
         with:
           node-version: "22.18"
       - run: npm audit --omit=dev --prefix frontend
-      - run: npm audit --omit=dev --prefix panel
+      # panel/ is a private tool, absent from the public release.
+      - run: if [ -d panel ]; then npm audit --omit=dev --prefix panel; fi
