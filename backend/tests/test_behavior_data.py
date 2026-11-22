@@ -40,7 +40,10 @@ def test_derivatives_and_unknown_recording_days_are_conservatively_grouped():
     for row in records:
         row['recording_day_verified'] = False
     assert len(set(leakage_components(records).values())) == 1
-    assert source_family(Path('h264/private-recording.mp4'), 'different') == source_family(Path('private-recording.dav'), 'original')
+    synthetic_stamp = '20990102030405'
+    encoded = Path('h264') / f'{synthetic_stamp}.mp4'
+    original = Path(f'{synthetic_stamp}.dav')
+    assert source_family(encoded, 'different') == source_family(original, 'original')
 
 
 @pytest.mark.parametrize('key', ['family_id', 'session_id', 'sha256', 'recording_day', 'overlap_groups'])
@@ -94,15 +97,14 @@ def test_sampler_and_seek_use_vfr_pts_and_keep_budget(video):
 def test_inventory_preserves_originals_and_distinguishes_first_frame_readability(video, tmp_path):
     root = tmp_path/'samples'
     root.mkdir()
-    (root/'private-recording.MP4').write_bytes(video.read_bytes())
+    (root/'synthetic-video.MP4').write_bytes(video.read_bytes())
     (root/'copy.mp4').write_bytes(video.read_bytes())
     (root/'invalid.dav').write_bytes(b'not video')
     result = inventory_sources(root,tmp_path/'inventory')
     records = result['sources']
     assert len({r['id'] for r in records}) == 3
     assert all(r['unchanged'] and r['recorded_at'] is None for r in records)
-    assert records[0]['readability'] == 'metadata_and_first_frame_only'
-    assert records[-1]['readability'] == 'unavailable'
+    assert sorted(r['readability'] for r in records) == ['metadata_and_first_frame_only'] * 2 + ['unavailable']
 
 
 def test_context_clip_sidecar_preserves_actual_source_pts_not_constant_fps(video, tmp_path):
