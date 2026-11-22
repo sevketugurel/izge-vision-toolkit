@@ -9,7 +9,8 @@ from izge.api import app
 
 
 ROOT = Path(__file__).resolve().parents[2]
-README = (ROOT / 'README.md').read_text()
+# The Turkish README holds the design-language and API-contract sections these tests check.
+README = (ROOT / 'README.tr.md').read_text()
 STYLE = (ROOT / 'frontend/src/style.css').read_text()
 
 
@@ -71,13 +72,13 @@ def test_readme_links_resolve_and_no_screenshots_are_embedded():
             assert path.suffix.lower() not in {'.png', '.jpg', '.jpeg', '.webp', '.gif', '.svg'}, target
 
 
-@pytest.mark.parametrize('filename', ['README.md', 'docs/VERIFICATION.md'])
+@pytest.mark.parametrize('filename', ['README.md', 'README.tr.md', 'docs/VERIFICATION.md'])
 def test_documentation_has_no_merge_conflict_markers(filename):
     text = (ROOT / filename).read_text()
     assert not re.search(r'^(?:<{7}|={7}|>{7})(?:\s.*)?$', text, re.M), filename
 
 
-@pytest.mark.parametrize('filename', ['README.md', 'docs/VERIFICATION.md'])
+@pytest.mark.parametrize('filename', ['README.tr.md', 'docs/VERIFICATION.md'])
 def test_sandbox_limits_are_explicit(filename):
     text = (ROOT / filename).read_text()
     # Only the current task entry is authoritative; historical runs remain intact.
