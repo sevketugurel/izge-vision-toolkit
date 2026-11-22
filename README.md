@@ -12,14 +12,14 @@ The original Turkish README is kept as [README.tr.md](README.tr.md).
 |---|---|---|
 | Video ingest, PTS-accurate frame timing, gap and non-monotonic-time diagnostics (PyAV) | Implemented, unit-tested | `backend/izge/video.py`, `backend/izge/vision/timing.py` |
 | Job queue with leases, worker, atomic result publishing (PostgreSQL 18) | Implemented and verified: migration round trip and 14 integration tests pass on PostgreSQL 18.0 | `backend/izge/worker.py`, `backend/tests/test_integration.py` |
-| Human review UI: labels, evidence clips, JSON/CSV export | Implemented and verified: builds; 8 of 9 Playwright e2e tests pass against the Compose stack, 1 fails (see Known limitations) | `frontend/` |
+| Human review UI: labels, evidence clips, JSON/CSV export | Implemented and verified: builds; all 10 Playwright e2e tests pass against the Compose stack | `frontend/` |
 | Multi-object tracker + MOT metrics (MOTA, IDF1, HOTA) and scoring CLI | Implemented, unit-tested; evaluated on synthetic data only | `backend/izge/vision/tracking.py`, `track_eval.py` |
 | Annotation audit, frame-quality scan, pair-interaction candidate filter | Implemented, unit-tested | `backend/izge/vision/` |
 | Per-stall "feeding time" pipeline (frozen DINOv3 backbone + classifier, human-label gate) | Partially implemented: code and training CLI exist; **no trained model is shipped and none has passed its acceptance gate** | `backend/izge/feeding/`, `docs/V1_PLAN.md` |
 | Animal detection and segmentation experiments (RF-DETR-Seg) | Experiments only, not wired into the worker | `experiments/`, `docs/DECISIONS.md` |
 | Posture classification | Research code behind an explicit human-label training gate; no trained model is shipped | `docs/POSTURE_TRAINING_GATE.md` |
 | Individual animal identification, behaviour classification, estrus/health detection | **Not implemented** | |
-| Optional shared bearer token for `/api/*` (`IZGE_API_TOKEN`) | Implemented and verified (unit tests and a live container). One shared secret; the bundled UI does not send it | `backend/izge/auth.py`, `SECURITY.md` |
+| Optional shared bearer token for `/api/*` (`IZGE_API_TOKEN`) | Implemented and verified (unit tests and a live container). One shared secret; the bundled UI does not send it, so with it set the browser UI cannot load data (verified) | `backend/izge/auth.py`, `SECURITY.md` |
 | User accounts, per-user authorization, TLS | **Not implemented.** Do not expose the API beyond localhost | `docs/ROADMAP.md` |
 | Dataset inventory/validation, authenticated native training runner (localhost), training control center | Implemented in `develop`; off by default, unit-tested where dependencies allow; GPU training itself not verified here | `backend/izge/datasets/`, `backend/izge/training/`, `docs/CONTROL_CENTER.md` |
 
@@ -68,7 +68,7 @@ uv run ruff check backend scripts
 uv run pytest -q --ignore=backend/tests/test_integration.py --ignore=backend/tests/test_feeding_integration.py
 ```
 
-Last verified run for this README (macOS arm64, Python 3.14.4, no database, no GPU): `ruff` passed; 485 passed, 8 skipped in 93 s. With the `ml` extra installed (`uv sync --frozen --extra ml`): 491 passed, 3 skipped. The remaining skips need `mlflow` and `pytorch_lightning` from the separate training environment. Unit-test line coverage of `backend/izge` is 66.9%; the reusable vision modules are at 97% to 100% (see `docs/oss-readiness/phase-2/TECHNICAL_VALIDATION.md`).
+Last verified run for this README (macOS arm64, Python 3.14.4, no database, no GPU): `ruff` passed; 485 passed, 8 skipped in 93 s. With the `ml` extra installed (`uv sync --frozen --extra ml`): 491 passed, 3 skipped. The 3 training-runner test files run with `uv sync --frozen --extra ml --extra training` plus `uv pip install pytorch-lightning==2.6.6` (18 passed); CI has a separate job for them. Unit-test line coverage of `backend/izge` is 66.9%; the reusable vision modules are at 97% to 100% (see [docs/architecture.en.md](docs/architecture.en.md)).
 
 Frontend:
 
@@ -119,13 +119,12 @@ flowchart LR
   P --> W
 ```
 
-Details: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) (Turkish) and [docs/oss-readiness/architecture-audit.md](docs/oss-readiness/architecture-audit.md).
+Details: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) (Turkish) and [docs/architecture.en.md](docs/architecture.en.md) (English summary).
 
 ## Known limitations
 
 - Authentication is an opt-in single shared token; no accounts, authorization, TLS or rate limiting. Do not expose the API to untrusted networks.
-- One Playwright test (`fixture-smoke.spec.ts`) fails on the "ML deneyleri" page with mocked API data (element detached while clicking); the cause was not isolated.
-- The Docker image bundles PyAV's FFmpeg, which is a GPL-enabled build; do not publish the image without reading `docs/oss-readiness/phase-2/LICENSE_DECISION.md`.
+- The Docker image bundles PyAV's FFmpeg, which is a GPL-enabled build; images are therefore not published; build locally.
 - Single-tenant assumptions in several places.
 - No trained model passes its acceptance gate. Any metric quoted in the repository is either synthetic (`origin=demo`) or explicitly model-derived and unvalidated.
 - Most project documentation is in Turkish.
@@ -136,7 +135,7 @@ Details: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) (Turkish) and [docs/oss-re
 
 ## Roadmap
 
-[docs/ROADMAP.md](docs/ROADMAP.md) (Turkish) and the short English summary in [docs/oss-readiness/opensource-strategy.md](docs/oss-readiness/opensource-strategy.md).
+[docs/ROADMAP.md](docs/ROADMAP.md) (Turkish) and the English summary [docs/roadmap.en.md](docs/roadmap.en.md).
 
 ## Contributing
 
@@ -148,4 +147,4 @@ Created and maintained by Sevket Ugurel ([@sevketugurel](https://github.com/sevk
 
 ## License
 
-**No license has been chosen yet**, so by default all rights are reserved and the code is not open source. See [docs/oss-readiness/opensource-strategy.md](docs/oss-readiness/opensource-strategy.md). Third-party licence notes: [docs/THIRD_PARTY_LICENSES.md](docs/THIRD_PARTY_LICENSES.md). Models such as DINOv3 carry their own licence terms.
+**No license has been chosen yet**, so by default all rights are reserved and the code is not open source. Third-party licence notes: [docs/THIRD_PARTY_LICENSES.md](docs/THIRD_PARTY_LICENSES.md). Models such as DINOv3 carry their own licence terms.

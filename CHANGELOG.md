@@ -9,7 +9,7 @@ All notable changes will be recorded here. The project follows [Keep a Changelog
 - GitHub issue and pull request templates.
 - GitHub Actions CI (backend lint and unit tests, PostgreSQL 18 integration, frontend build) with read-only permissions and SHA-pinned actions.
 - Dependabot configuration for Actions, uv and npm.
-- `docs/oss-readiness/` audit and application documents.
+- English architecture and roadmap summaries (`docs/architecture.en.md`, `docs/roadmap.en.md`).
 
 - Optional bearer-token guard for `/api/*` (`IZGE_API_TOKEN`), off by default.
 - Security workflow: gitleaks (full history), pip-audit, npm audit; Docker build job in CI.
@@ -22,6 +22,7 @@ All notable changes will be recorded here. The project follows [Keep a Changelog
 - Docker image applies Debian security updates at build time.
 
 ### Fixed
+- A malformed API answer on the control-center or admin pages crashed the whole UI; pages now show an inline error (error boundary + response shape checks, with an e2e regression test).
 - `docker compose up --build` failed because the frontend stage could not find `design/motion-tokens.json`.
 - Test results no longer depend on an ambient `IZGE_CAMERA_CONFIG_DIRS`.
 

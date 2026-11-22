@@ -41,7 +41,7 @@ No release has been published. When one is, the project will use SemVer pre-1.0 
 
 ## Licensing of contributions
 
-The repository has **no license yet** (see `docs/oss-readiness/opensource-strategy.md`). Until one is chosen, please do not assume contributions can be redistributed. Once a license is added, contributions will be accepted under it, with sign-off (DCO) required.
+The repository has **no license yet** (Apache-2.0 is under consideration). Until one is chosen, please do not assume contributions can be redistributed. Once a license is added, contributions will be accepted under it, with sign-off (DCO) required.
 
 ## Conduct
 
