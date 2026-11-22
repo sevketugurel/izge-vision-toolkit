@@ -188,7 +188,7 @@ def native_abort_log(request):
     return (
         "----- Native stack trace -----\n\n"
         f" 3: {address} node::Start(int, char**) "
-        "[~/.nvm/versions/node/v22.18.0/bin/node]\n"
+        "[~/local-project/.nvm/versions/node/v22.18.0/bin/node]\n"
         " 4: 0x19bc6be80 start [/usr/lib/dyld]\n"
         f"./scripts/verify_docker.sh: line 7: {pid} Abort trap: 6           "
         'NODE_OPTIONS="$VERIFY_NODE_OPTIONS" UV_THREADPOOL_SIZE="$VERIFY_UV_THREADPOOL_SIZE" "$@"\n'
