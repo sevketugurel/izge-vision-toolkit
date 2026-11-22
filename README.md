@@ -1,4 +1,4 @@
-# İzge
+# İzge Vision Toolkit
 
 İzge is a research-stage toolkit for turning barn camera footage into reviewable, auditable observations about cattle. It is a modular monolith (FastAPI, PostgreSQL, a job-queue worker, a React review UI) with a computer-vision layer for video decoding, tracking evaluation and annotation auditing.
 
@@ -144,6 +144,12 @@ See [CONTRIBUTING.md](CONTRIBUTING.md). Security reports: [SECURITY.md](SECURITY
 ## Maintainers
 
 Created and maintained by Sevket Ugurel ([@sevketugurel](https://github.com/sevketugurel)), who authored about 99% of the commits. About 86% of commits (239 of 277 on `develop`) carry co-author trailers for AI coding assistants (Claude Opus 5.5 and Sonnet 5.5). All pull requests were opened and merged by the maintainer; external review has not happened yet.
+
+## History and acknowledgements
+
+This repository was carried over from the private İzge development repository with `git filter-repo`. Commits, authors and dates are preserved; private tooling (an agent-orchestration subproject), camera/NVR integration experiments, internal planning notes and two early overview documents were removed, so commit hashes differ and the original pull-request history is not included.
+
+The two early project-overview documents were written by Enes Beşiktaş ([@EnesBesiktas](https://github.com/EnesBesiktas)); they are not included here pending his permission.
 
 ## License
 
