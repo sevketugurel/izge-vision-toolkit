@@ -715,6 +715,7 @@ dependencies = [
     { name = "python-multipart" },
     { name = "pyyaml" },
     { name = "scikit-learn" },
+    { name = "scipy" },
     { name = "sqlalchemy" },
     { name = "uvicorn" },
 ]
@@ -760,6 +761,7 @@ requires-dist = [
     { name = "python-multipart", specifier = "==0.0.32" },
     { name = "pyyaml", specifier = "==6.0.3" },
     { name = "scikit-learn", specifier = "==1.9.1" },
+    { name = "scipy", specifier = "==1.18.1" },
     { name = "sqlalchemy", specifier = "==2.0.44" },
     { name = "torch", marker = "sys_platform == 'linux' and extra == 'ml'", specifier = "==2.14.1", index = "https://download.pytorch.org/whl/cpu", conflict = { package = "izge", extra = "ml" } },
     { name = "torch", marker = "sys_platform != 'linux' and extra == 'ml'", specifier = "==2.14.1" },

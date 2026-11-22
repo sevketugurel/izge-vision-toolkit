@@ -1,0 +1,14 @@
+# Gitleaks configuration. The only allow-listed findings are fake secrets used by redaction tests
+# in the legacy harness subproject (reviewed 2026-11-22: monkeypatch.setenv('GH_TOKEN', <fake>) etc.).
+title = "izge gitleaks config"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Fake secrets in harness redaction tests and a planning document"
+paths = [
+  '''harness/tests/.*''',
+  '''harness/core/tests/.*''',
+  '''ops/agent-swarm/provider-failover/PLAN\.md''',
+]
