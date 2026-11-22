@@ -2,7 +2,7 @@
 
 All notable changes will be recorded here. The project follows [Keep a Changelog](https://keepachangelog.com/) and, once released, pre-1.0 [SemVer](https://semver.org/).
 
-## [Unreleased]
+## [0.1.0] — Initial source release
 
 ### Added
 - English README, CONTRIBUTING, SECURITY, SUPPORT, CODE_OF_CONDUCT.
@@ -25,5 +25,3 @@ All notable changes will be recorded here. The project follows [Keep a Changelog
 - A malformed API answer on the control-center or admin pages crashed the whole UI; pages now show an inline error (error boundary + response shape checks, with an e2e regression test).
 - `docker compose up --build` failed because the frontend stage could not find `design/motion-tokens.json`.
 - Test results no longer depend on an ambient `IZGE_CAMERA_CONFIG_DIRS`.
-
-No release has been published yet.

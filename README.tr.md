@@ -2,7 +2,7 @@
 
 Saha kayıtları, video işleme, PostgreSQL iş kuyruğu, günlük kapsam raporu ve insan incelemesi için modüler monolit. GPU gerekmez. **Gerçek bir davranış modeli bağlı değildir.** Gerçek dosya adaptörü kareleri CPU üzerinde çözer ve `unavailable` gözlemleri üretir. Sentetik analiz yalnızca ayrı demo işletmesinde kullanılabilir.
 
-> Teslim durumu: geçmiş tam doğrulama koşuları ve güncel kontrol sonuçları [doğrulama kaydında](docs/VERIFICATION.md) ayrı tutulur. Bu sandbox'ta Playwright e2e **SKIP** olarak raporlanır; başarılı sayılmaz. v1 planı: [docs/V1_PLAN.md](docs/V1_PLAN.md).
+> Teslim durumu: geçmiş tam doğrulama koşuları ve güncel kontrol sonuçları [doğrulama kaydında](docs/VERIFICATION.md) ayrı tutulur. Bu sandbox'ta Playwright e2e **SKIP** olarak raporlanır; başarılı sayılmaz. Plan: [yol haritası](docs/roadmap.en.md).
 
 ## Başlatma
 
@@ -39,13 +39,13 @@ docker compose exec api python -m izge.demo
 
 ### Bölme bazlı yemde süresi (v1)
 
-1. `config/cameras/` altında kamera config'ini doldurun (örnek: `synthetic_feeding.yaml`, koordinatlar **yer tutucu**; `placeholder: false` yapılmadan analiz reddedilir). **Kesit önizleme** sayfası kesitleri referans kare üzerinde gösterir.
+1. `config/cameras/` altında kamera config'ini doldurun (örnek: `synthetic_feeding.yaml`, geometri tamamen sentetiktir; gerçek kamerada kendi doğrulanmış koordinatlarınızı kullanın). **Kesit önizleme** sayfası kesitleri referans kare üzerinde gösterir.
 2. **Saha ayarları**nda kamerayı bu config ile oluşturun. **Video ve işler**de H.264 MP4 yükleyin; kayıt başlangıcı dosya adından (config regex) okunur, okunamazsa form alanı zorunludur.
 3. **Etiketleme örnekleri oluştur** → **Etiketleme** ekranında `1` yemde, `2` yemde değil, `3` görünmüyor, `Z` geri al, `S` atla.
 4. Eğitim (DINOv3 ağırlıkları için `HF_TOKEN` gerekir): `docker compose exec worker python -m izge.train --farm <işletme-id>`.
 5. **Yemde analizini başlat** → **Yemde süresi**: bölme zaman çizelgesi, günlük özet, CSV, kullanılan model sürümü. Eğitilmiş model yoksa sonuç üretilmez; demo sonuçları **DEMO** olarak işaretlenir. DINOv3 tabanlı modellerde panel "Built with DINOv3" ibaresini gösterir.
 
-6. Altın set (BORIS aggregated events) ve değerlendirme: `python -m izge.gold import|evaluate|list`; raporlar `docs/reports/` altına yazılır. Ayrıntı: [docs/reports/README.md](docs/reports/README.md).
+6. Altın set (BORIS aggregated events) ve değerlendirme: `python -m izge.gold import|evaluate|list`; raporlar yerel olarak yazılır; gerçek veri veya raporları repoya eklemeyin.
 
 Hız ölçümü: `uv run --extra ml python scripts/bench_feeding.py` (ayrıntı: docs/VERIFICATION.md).
 
@@ -216,4 +216,4 @@ Ayrıntılar ve son sonuçlar: [docs/VERIFICATION.md](docs/VERIFICATION.md). Ent
 - Dosya işleme ve demo sonuçları gerçek canlı alarm gecikmesinin kanıtı değildir.
 - İlk analizde uzun videonun gözlemleri türetme aşamasında belleğe alınır; büyük saha kayıtları için bellek/performans testi ve artımlı türetme gerekir.
 
-[GCP dağıtımı](docs/DEPLOY_GCP.md) · [Mimari](docs/ARCHITECTURE.md) · [Proje bağlamı](docs/CONTEXT.md) · [Yol haritası ve pilot girdileri](docs/ROADMAP.md) · [Üçüncü taraflar](docs/THIRD_PARTY_LICENSES.md)
+[Mimari](docs/architecture.en.md) · [Yol haritası](docs/roadmap.en.md) · [Üçüncü taraflar](THIRD_PARTY_NOTICES.md)

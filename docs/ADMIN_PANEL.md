@@ -75,4 +75,4 @@ python3 scripts/admin_panel_smoke.py --url http://127.0.0.1:5174 --out /tmp/admi
 
 `agent-browser` kurulu ve uygulama çalışır olmalıdır. Kontrol, dört sayfanın gerçek render'ını ve her sayfada 390 px taşma sınırını sınar. Geçersiz `{}` gövdesiyle aynı kaynak için 422, dış Origin için 403 bekler; bu istekler görev oluşturamaz. Kaynakta `smoke` koşusu varsa gerçek kayıp grafiğini de açar. Ekran görüntüleri ve ham tarayıcı çıktısı `--out` altında kalır; çıktı PASS/FAIL ve kanıt yoludur.
 
-Teslim kanıtı: [reports/admin-panel/README.md](reports/admin-panel/README.md). Tam doğrulama kaydı: [VERIFICATION.md](VERIFICATION.md).
+Teslim kanıtı: reports/admin-panel/README.md. Tam doğrulama kaydı: [VERIFICATION.md](VERIFICATION.md).

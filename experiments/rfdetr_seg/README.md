@@ -11,15 +11,15 @@ Repo kökünden:
 uv sync --locked --project experiments/rfdetr_seg --python /opt/homebrew/bin/python3.12
 .venv/bin/python scripts/fetch_behavior_model.py --output models/rfdetr/rf-detr-seg-small.pt
 experiments/rfdetr_seg/.venv/bin/python scripts/inspect_behavior_detection.py \
-  --source ~/Downloads/private-recording.mp4 \
-  --config config/behavior/reference_barn.draft_review.yaml \
+  --source ./local-input.mp4 \
+  --config config/behavior/reference_barn.yaml \
   --model models/rfdetr/rf-detr-seg-small.pt \
   --device mps --mode diagnostic-full-frame --threshold 0.5 \
   --output-dir artifacts/behavior-stage2-new-run
 .venv/bin/python scripts/review_behavior_rois.py \
-  --source ~/Downloads/private-recording.mp4 \
-  --config config/behavior/reference_barn.draft_review.yaml \
-  --notes docs/ROI_REVIEW_REFERENCE.md \
+  --source ./local-input.mp4 \
+  --config config/behavior/reference_barn.yaml \
+  --notes ./local-roi-notes.md \
   --output-dir artifacts/behavior-stage2-new-run/roi-review
 experiments/rfdetr_seg/.venv/bin/python experiments/rfdetr_seg/audit_environment.py \
   --output artifacts/behavior-stage2-new-run/environment_audit.json
@@ -35,7 +35,7 @@ modelle True bulundu. MPS komutu uygun cihaz erişimiyle çalıştırılmalıdı
 Resmî paket ve seçilen Seg Small ağırlığı Apache-2.0; tüm RF-DETR/Plus ailesi bu lisans altında değildir.
 Standart rfdetr bağımlılığı Supervision 0.29 üzerinden gelen OpenCV 5.0.0.93 ve denenen 4.12.0.88 macOS
 wheel'lerinin **gerçek libavcodec** ikilisi GPLv3 ve `--enable-gpl` bildirdi. Bu wheel'ler son ortamdan çıkarıldı.
-Ana projenin lisans politikası değiştirilmedi. Ayrıntılar [lisans envanteri](../../docs/THIRD_PARTY_LICENSES.md).
+Ana projenin lisans politikası değiştirilmedi. Ayrıntılar [üçüncü taraf bildirimleri](../../THIRD_PARTY_NOTICES.md).
 
 Bu macOS'a sınırlı projede `override-dependencies = ["supervision; sys_platform == 'win32'"]` açıkça
 Supervision'u dışlar. Genel `RFDETR.predict()`/Supervision anotasyon API'si ve eğitim bu ortamda desteklenmez.

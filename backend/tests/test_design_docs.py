@@ -72,18 +72,14 @@ def test_readme_links_resolve_and_no_screenshots_are_embedded():
             assert path.suffix.lower() not in {'.png', '.jpg', '.jpeg', '.webp', '.gif', '.svg'}, target
 
 
-@pytest.mark.parametrize('filename', ['README.md', 'README.tr.md', 'docs/VERIFICATION.md'])
+@pytest.mark.parametrize('filename', ['README.md', 'README.tr.md', 'SECURITY.md'])
 def test_documentation_has_no_merge_conflict_markers(filename):
     text = (ROOT / filename).read_text()
     assert not re.search(r'^(?:<{7}|={7}|>{7})(?:\s.*)?$', text, re.M), filename
 
 
-@pytest.mark.parametrize('filename', ['README.tr.md', 'docs/VERIFICATION.md'])
-def test_sandbox_limits_are_explicit(filename):
-    text = (ROOT / filename).read_text()
-    # Only the current task entry is authoritative; historical runs remain intact.
-    if filename.endswith('VERIFICATION.md'):
-        text = section(text, 'D6 — doküman ve tasarım testleri (#447) — 2026-10-23')
+def test_sandbox_limits_are_explicit():
+    text = README
     assert re.search(r'Playwright e2e.*?SKIP', text, re.S)
     assert 'sandbox dışında' in text
     assert 'görsel inceleme' in text

@@ -10,7 +10,7 @@ First public release. Research stage: no trained model ships, and no accuracy on
 - Optional shared bearer token for `/api/*` (`IZGE_API_TOKEN`); for scripts or proxies only.
 
 ## Verified on GitHub Actions
-486 unit, 14 PostgreSQL 18 integration and 18 training-runner tests; frontend and Docker image builds; gitleaks (full history), pip-audit and npm audit clean.
+GitHub Actions checks the exact release commit. See the repository Actions tab for run results and test counts.
 
 ## Not included
 Docker images (the PyAV wheel bundles a GPL-enabled FFmpeg build), model weights, datasets, farm footage.

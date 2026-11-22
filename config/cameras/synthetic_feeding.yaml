@@ -1,0 +1,24 @@
+# Fictional camera geometry for tests and the synthetic benchmark only.
+camera_id: synthetic_feeding
+name: Synthetic feeding camera
+barn: Example barn
+placeholder: false
+timezone: Europe/Istanbul
+reference_resolution: {width: 2560, height: 1440}
+filename_time:
+  pattern: '(?P<Y>\d{4})(?P<m>\d{2})(?P<d>\d{2})[_T-]?(?P<H>\d{2})(?P<M>\d{2})(?P<S>\d{2})'
+stalls:
+  - {id: O-01, sira: orta, mesafe: yakin, box: [200, 200, 720, 310]}
+  - {id: O-02, sira: orta, mesafe: yakin, box: [200, 340, 720, 450]}
+  - {id: O-03, sira: orta, mesafe: yakin, box: [200, 480, 720, 590]}
+  - {id: O-04, sira: orta, mesafe: yakin, box: [200, 620, 720, 730]}
+  - {id: O-05, sira: orta, mesafe: yakin, box: [200, 760, 720, 870]}
+  - {id: O-06, sira: orta, mesafe: yakin, box: [200, 900, 720, 1010]}
+  - {id: O-07, sira: orta, mesafe: yakin, box: [200, 1040, 720, 1150]}
+  - {id: S-01, sira: sag, mesafe: yakin, box: [1400, 200, 1920, 310]}
+  - {id: S-02, sira: sag, mesafe: yakin, box: [1400, 340, 1920, 450]}
+  - {id: S-03, sira: sag, mesafe: yakin, box: [1400, 480, 1920, 590]}
+  - {id: S-04, sira: sag, mesafe: yakin, box: [1400, 620, 1920, 730]}
+  - {id: S-05, sira: sag, mesafe: yakin, box: [1400, 760, 1920, 870]}
+  - {id: S-06, sira: sag, mesafe: yakin, box: [1400, 900, 1920, 1010]}
+  - {id: S-07, sira: sag, mesafe: yakin, box: [1400, 1040, 1920, 1150]}

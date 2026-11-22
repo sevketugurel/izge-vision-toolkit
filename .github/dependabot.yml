@@ -5,7 +5,7 @@ updates:
     schedule:
       interval: weekly
   - package-ecosystem: uv
-    directories: [/, /experiments/rfdetr_training]
+    directories: [/, /experiments/rfdetr_training, /experiments/rfdetr_seg]
     schedule:
       interval: weekly
   - package-ecosystem: npm

@@ -274,7 +274,7 @@ def test_real_output_writer_hashes_closed_jsonl_without_model_download(tmp_path,
     pilot = tmp_path / "pilot"
     pilot.mkdir()
     rows = []
-    for i, name in enumerate(["private-recording.MP4", "private-recording.MP4"]):
+    for i, name in enumerate(["day-example.mp4", "night-example.mp4"]):
         p = src / name
         p.write_bytes(b"synthetic-source-fixture")
         rows.append(
@@ -321,7 +321,10 @@ def test_real_output_writer_hashes_closed_jsonl_without_model_download(tmp_path,
         p = tmp_path / f"{name}.json"
         p.write_text(json.dumps({"model_class": name, "weights_sha256": "synthetic-fixture"}))
         locks.append(p)
-    result = low_label.comparison(pilot, src, tmp_path / "output", locks, [tmp_path / "unused"] * 2, "cpu")
+    result = low_label.comparison(
+        pilot, src, tmp_path / "output", locks, [tmp_path / "unused"] * 2, "cpu",
+        day_source="day-example.mp4", night_source="night-example.mp4",
+    )
     for run in result["runs"]:
         assert run["status"] == "success"
         assert run["proposals_sha256"] == checksum(

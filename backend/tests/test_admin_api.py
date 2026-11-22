@@ -66,7 +66,7 @@ def test_create_native_title_comments_and_remote_planning(bridge, monkeypatch):
         dependencies=[],
         branch="feat/admin",
         commit="abc123",
-        pr_url="[private reference removed]",
+        pr_url="https://github.com/example/repository/pull/3",
     )
     assert bridge.put(f"/api/admin/tasks/{TASK_ID}/planning", json=planning).status_code == 200
     assert calls[-1][0] == "PUT" and kv["value"]["column"] == "Review"

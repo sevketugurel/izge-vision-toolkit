@@ -1,9 +1,5 @@
 İzge Vision Toolkit
 Copyright 2026 Sevket Ugurel
 
-
-This product includes software developed by third parties. See THIRD_PARTY_NOTICES.md
-for the dependency inventory and the notices that must accompany binary redistribution.
-
-Model weights and datasets are NOT covered by this license. DINOv3-based models must carry
-the attribution "Built with DINOv3" and follow the DINOv3 license.
+Third-party licenses and model terms are summarized in THIRD_PARTY_NOTICES.md.
+Model weights and external datasets are not distributed with this source release.

@@ -2,7 +2,7 @@
 
 ## Supported versions
 
-İzge has no tagged release. Only the latest commit on the default branch receives security fixes.
+Security fixes are made on the default branch. Use the latest published source release or current `main`.
 
 ## Reporting a vulnerability
 
@@ -23,7 +23,7 @@ You can expect an acknowledgement within about 7 days. This is a single-maintain
 
 ## What is checked automatically
 
-CI runs gitleaks over the full history, `pip-audit` on the locked Python dependencies, `npm audit` on production frontend dependencies, and builds the Docker image. These checks reduce risk; they do not prove the absence of vulnerabilities.
+CI runs gitleaks over the full history, `pip-audit` on the locked Python dependencies, `npm audit` on frontend dependencies, and builds the Docker image. These checks reduce risk; they do not prove the absence of vulnerabilities.
 
 ## Data handling
 

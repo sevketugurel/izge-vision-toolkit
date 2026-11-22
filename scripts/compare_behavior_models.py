@@ -6,9 +6,11 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "backend"))
 from izge.vision.low_label import comparison, prepare_candidates  # noqa: E402
 
-p = argparse.ArgumentParser(description="Eight matched raw AHIR2 frames; held-out AHIR3 excluded")
+p = argparse.ArgumentParser(description="Compare two segmentation models on eight user-selected frames")
 p.add_argument("--pilot", type=Path, required=True)
 p.add_argument("--source-dir", type=Path, required=True)
+p.add_argument("--day-source", required=True, help="Daytime path as listed in the pilot manifest")
+p.add_argument("--night-source", required=True, help="Nighttime path as listed in the pilot manifest")
 p.add_argument("--output-dir", type=Path, required=True)
 p.add_argument("--device", choices=["mps", "cpu", "auto"], default="mps")
 a = p.parse_args()
@@ -19,6 +21,8 @@ r = comparison(
     [Path("experiments/rfdetr_seg/model.lock.json"), Path("experiments/rfdetr_seg/large.model.lock.json")],
     [Path("models/rfdetr/rf-detr-seg-small.pt"), Path("models/rfdetr/rf-detr-seg-large.pt")],
     a.device,
+    day_source=a.day_source,
+    night_source=a.night_source,
 )
 prepare_candidates(a.output_dir)
 print([(x["model_class"], x["status"], [f["count"] for f in x["frames"]]) for x in r["runs"]])

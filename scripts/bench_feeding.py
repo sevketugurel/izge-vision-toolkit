@@ -5,7 +5,7 @@
 With HF_TOKEN the real DINOv3 ViT-S/16 weights are used. Without it, the measurement is skipped
 unless --random-weights is given: that builds the same ViT-S/16 architecture with random weights,
 which measures compute cost only and produces NO meaningful embeddings.
-Frames: 1 Hz PTS sampling, every stall of synthetic_feeding cropped (placeholder geometry).
+Frames: 1 Hz PTS sampling, every stall of synthetic_feeding cropped (synthetic geometry).
 """
 import argparse
 import os

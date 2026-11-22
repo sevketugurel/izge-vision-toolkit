@@ -31,7 +31,7 @@ jobs:
           echo "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb  gitleaks.tar.gz" | sha256sum -c -
           tar xzf gitleaks.tar.gz gitleaks
       - name: Scan (values redacted)
-        run: ./gitleaks git . --config .gitleaks.toml --redact=100 --no-banner
+        run: ./gitleaks git . --log-opts=--all --config .gitleaks.toml --redact=100 --no-banner
 
   python-audit:
     name: Python dependency audit (pip-audit)
@@ -44,9 +44,9 @@ jobs:
       - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
         with:
           python-version: "3.14"
-      - name: Audit locked dependencies (including the ml extra)
+      - name: Audit locked Python dependencies
         run: |
-          uv export --frozen --no-hashes --extra ml --extra gcp --no-emit-project -o requirements-audit.txt
+          uv export --frozen --no-hashes --extra ml --extra gcp --extra training --no-emit-project -o requirements-audit.txt
           uvx pip-audit==2.10.1 -r requirements-audit.txt --no-deps --disable-pip
       - name: Audit the separate RF-DETR training lock
         # torch/torchvision are CUDA local-version wheels (not on PyPI) and are reported as skipped.
@@ -54,8 +54,13 @@ jobs:
           uv export --frozen --no-hashes --no-emit-project --project experiments/rfdetr_training -o requirements-training.txt
           uvx pip-audit==2.10.1 -r requirements-training.txt --no-deps --disable-pip
 
+      - name: Audit RF-DETR inference lock (macOS resolution)
+        run: |
+          uv export --project experiments/rfdetr_seg --frozen --no-hashes --no-emit-project -o requirements-seg.txt
+          uvx pip-audit==2.10.1 -r requirements-seg.txt --no-deps --disable-pip
+
   npm-audit:
-    name: npm audit (frontend and panel, production dependencies)
+    name: npm audit (frontend dependencies)
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
@@ -65,6 +70,4 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "22.18"
-      - run: npm audit --omit=dev --prefix frontend
-      # panel/ is a private tool, absent from the public release.
-      - run: if [ -d panel ]; then npm audit --omit=dev --prefix panel; fi
+      - run: npm audit --prefix frontend

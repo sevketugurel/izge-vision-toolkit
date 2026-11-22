@@ -1,18 +1,18 @@
 # Third-party notices 
 
-Regenerated 2026-11-22 after the dependency upgrades, from the locked environment of branch `oss-rc` (uv.lock incl. the `ml`, `gcp` and `training` extras, 99 packages) and the npm lockfiles. Python licenses come from PyPI metadata for the exact locked versions; empty metadata was resolved from installed package metadata. It does not replace each project's own LICENSE/NOTICE files, which must accompany any binary or container redistribution.
+This is a source-only distribution. The dependency manifests and lockfiles are authoritative for package versions and platforms. Packages installed separately retain their upstream licenses. This inventory is not a clearance to distribute a wheel, container or model.
 
-## Items needing action
+## Redistribution boundaries
 
 | Component | License | Why it matters |
 |---|---|---|
 | psycopg, psycopg-binary 3.2.12 | LGPL-3.0-only | Allowed as an unmodified dependency. Ship the LGPL text and a notice with any image or bundle; do not statically combine or modify without complying. |
 | PyAV 19.0.0 (wheel bundles FFmpeg) | PyAV: BSD-3-Clause. Bundled FFmpeg: **GPL-enabled build** (libx264 and libx265 are present in `av.codecs_available`) | Distributing the wheel or a Docker image that contains it conveys GPL-licensed binaries: GPL text, source offer, and notice are required. Distributing only this repository's source (users install PyAV themselves) does not convey them. Options for a public image: build PyAV against an LGPL-only FFmpeg, or do not publish images. |
 | certifi 2026.11.20, tqdm 4.70.1 | MPL-2.0 (tqdm: MPL-2.0 AND MIT) | File-level copyleft; unmodified use is fine. Keep notices. |
-| lightningcss (frontend/panel, dev only) | MPL-2.0 | Build tool, not shipped in the bundle. |
+| lightningcss (frontend build tool) | MPL-2.0 | Build tool, not shipped in the bundle. |
 | DINOv3 weights (not in repo) | Meta DINOv3 custom license | Weights are downloaded at runtime with a user token; attribution "Built with DINOv3" required where the model is used. |
 | SAM 3.x, RF-DETR weights (not in repo) | SAM: Meta custom license; RF-DETR Seg-L: Apache-2.0 | Per-model terms; see docs/THIRD_PARTY_LICENSES.md. |
-| Ultralytics YOLO | AGPL-3.0 | Excluded by project policy; confirm no code imports it before publishing. |
+| Ultralytics YOLO | AGPL-3.0 | Not distributed, declared or imported. |
 
 ## Python packages (locked)
 
@@ -118,7 +118,7 @@ Regenerated 2026-11-22 after the dependency upgrades, from the locked environmen
 | uvicorn | 0.52.4 | BSD-3-Clause | permissive |
 | zipp | 4.1.2 | MIT | permissive |
 
-## npm: frontend/ (55 locked packages; 24 are platform-specific optional binaries not installed on this machine and not listed)
+## Selected npm dependencies (frontend)
 
 | Package | Version | License | Dev only |
 |---|---|---|---|
@@ -152,37 +152,12 @@ Regenerated 2026-11-22 after the dependency upgrades, from the locked environmen
 | tinyglobby | 0.2.17 | MIT | yes |
 | tslib | 2.8.1 | 0BSD | no |
 | typescript | 6.0.3 | Apache-2.0 | yes |
-| vite | 8.2.0 | MIT | yes |
+| vite | 8.3.8 | MIT | yes |
 
-## npm: panel/ (48 locked packages; 24 are platform-specific optional binaries not installed on this machine and not listed)
+Upstream licensing and model attribution:
 
-| Package | Version | License | Dev only |
-|---|---|---|---|
-| @oxc-project/types | 0.155.0 | MIT | yes |
-| @rolldown/binding-darwin-arm64 | 1.2.15 | MIT | yes |
-| @rolldown/pluginutils | 1.0.1 | MIT | yes |
-| @types/react | 19.2.18 | MIT | yes |
-| @types/react-dom | 19.2.7 | MIT | yes |
-| @vitejs/plugin-react | 6.1.2 | MIT | yes |
-| csstype | 3.2.3 | MIT | yes |
-| detect-libc | 2.1.2 | Apache-2.0 | yes |
-| fdir | 6.5.0 | MIT | yes |
-| fsevents | 2.3.3 | MIT | yes |
-| lightningcss | 1.33.0 | MPL-2.0 | yes |
-| lightningcss-darwin-arm64 | 1.33.0 | MPL-2.0 | yes |
-| nanoid | 3.3.20 | MIT | yes |
-| picocolors | 1.1.1 | ISC | yes |
-| picomatch | 4.0.7 | MIT | yes |
-| postcss | 8.5.31 | MIT | yes |
-| react | 19.2.9 | MIT | no |
-| react-dom | 19.2.9 | MIT | no |
-| rolldown | 1.2.15 | MIT | yes |
-| scheduler | 0.27.0 | MIT | no |
-| source-map-js | 1.2.2 | BSD-3-Clause | yes |
-| tinyglobby | 0.2.17 | MIT | yes |
-| typescript | 6.0.3 | Apache-2.0 | yes |
-| vite | 8.3.5 | MIT | yes |
-
-## Not covered
-
-`experiments/*/uv.lock` (including pytorch-lightning 2.6.6, Apache-2.0, used by an optional CI job), `harness/` (not in the public release) (RF-DETR training environment, about 98 packages) and Terraform providers have their own lockfiles and were **not** inventoried here. Container base images (python, node, postgres, Debian packages such as FFmpeg from apt) were not inventoried; the Dockerfile installs Debian's `ffmpeg` package as well as the PyAV wheel.
+- PyAV: [BSD-3-Clause](https://github.com/PyAV-Org/PyAV/blob/main/LICENSE.txt); [FFmpeg licensing](https://ffmpeg.org/legal.html) depends on the binary build. No FFmpeg or PyAV binaries or Docker images are distributed here.
+- [Psycopg licensing](https://www.psycopg.org/psycopg3/docs/) is separate from this code license. No driver wheel or `libpq` is bundled.
+- [RF-DETR upstream](https://github.com/roboflow/rf-detr): the selected Seg Small and Seg Large checkpoints are identified by the checked-in model manifests. The project does not ship checkpoints, and no license for a particular Seg checkpoint is assumed to cover other weights or Plus variants.
+- [Built with DINOv3](https://github.com/facebookresearch/dinov3/blob/main/LICENSE.md): optional Meta model under its own license, with access and attribution conditions. Model weights are not included.
+- See [frontend/licenses/](frontend/licenses/) for preserved upstream frontend license texts and [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) for its own attribution. All upstream notices remain in force.

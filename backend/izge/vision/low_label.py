@@ -72,14 +72,15 @@ def rgb_descriptor(image: Image.Image) -> np.ndarray:
 
 
 def comparison(
-    pilot: Path, source_dir: Path, output: Path, locks: list[Path], weights: list[Path], device: str
+    pilot: Path, source_dir: Path, output: Path, locks: list[Path], weights: list[Path], device: str,
+    *, day_source: str, night_source: str
 ) -> dict:
     prepare_output(output)
     manifest = json.loads((pilot / "manifest.json").read_text())
     sources = manifest["sources"]
     specs = [
-        ("private-recording.MP4", [0, 60, 900, 1798.7], "day"),
-        ("private-recording.MP4", [0, 60, 903.62, 1806.24], "night"),
+        (day_source, [0, 5, 10, 15], "day"),
+        (night_source, [0, 5, 10, 15], "night"),
     ]
     frames = []
     (output / "images").mkdir()
@@ -143,7 +144,7 @@ def comparison(
             detector = RFDETRSegDetector(
                 weight,
                 device,
-                load(Path("config/behavior/barn2_long.draft.yaml")),
+                load(Path("config/behavior/reference_barn.yaml")),
                 "diagnostic-full-frame",
                 model_lock=lock,
             )

@@ -1,6 +1,6 @@
 # Architecture (English summary)
 
-The authoritative, detailed design is in [ARCHITECTURE.md](ARCHITECTURE.md) (Turkish). This page summarises what is implemented.
+This page summarizes what is implemented and the design rules that keep evaluation and review auditable.
 
 ```mermaid
 flowchart LR
