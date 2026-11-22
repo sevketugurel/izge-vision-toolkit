@@ -11,7 +11,18 @@ All notable changes will be recorded here. The project follows [Keep a Changelog
 - Dependabot configuration for Actions, uv and npm.
 - `docs/oss-readiness/` audit and application documents.
 
+- Optional bearer-token guard for `/api/*` (`IZGE_API_TOKEN`), off by default.
+- Security workflow: gitleaks (full history), pip-audit, npm audit; Docker build job in CI.
+- Hand-computed regression test for `scripts/score_tracks.py` (synthetic scene).
+
 ### Changed
-- Previous Turkish README moved to `README.tr.md`.
+- Previous Turkish README moved to `README.tr.md`; design-language tests now read it there.
+- Compose app containers drop all capabilities and set `no-new-privileges`.
+- Dependencies: pillow 12.3.0 to 13.0.0 (42 advisories), pytest 9.0.3, pyasn1 0.6.5, plus refreshed transitives; `scipy` is now declared explicitly.
+- Docker image applies Debian security updates at build time.
+
+### Fixed
+- `docker compose up --build` failed because the frontend stage could not find `design/motion-tokens.json`.
+- Test results no longer depend on an ambient `IZGE_CAMERA_CONFIG_DIRS`.
 
 No release has been published yet.

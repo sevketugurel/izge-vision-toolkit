@@ -11,17 +11,19 @@ The original Turkish README is kept as [README.tr.md](README.tr.md).
 | Capability | Status | Evidence |
 |---|---|---|
 | Video ingest, PTS-accurate frame timing, gap and non-monotonic-time diagnostics (PyAV) | Implemented, unit-tested | `backend/izge/video.py`, `backend/izge/vision/timing.py` |
-| Job queue with leases, worker, atomic result publishing (PostgreSQL 18) | Implemented; integration tests not run in this audit (no Docker) | `backend/izge/worker.py`, `backend/tests/test_integration.py` |
-| Human review UI: labels, evidence clips, JSON/CSV export | Implemented; frontend builds, e2e not run | `frontend/` |
+| Job queue with leases, worker, atomic result publishing (PostgreSQL 18) | Implemented and verified: migration round trip and 14 integration tests pass on PostgreSQL 18.0 | `backend/izge/worker.py`, `backend/tests/test_integration.py` |
+| Human review UI: labels, evidence clips, JSON/CSV export | Implemented and verified: builds; 8 of 9 Playwright e2e tests pass against the Compose stack, 1 fails (see Known limitations) | `frontend/` |
 | Multi-object tracker + MOT metrics (MOTA, IDF1, HOTA) and scoring CLI | Implemented, unit-tested; evaluated on synthetic data only | `backend/izge/vision/tracking.py`, `track_eval.py` |
 | Annotation audit, frame-quality scan, pair-interaction candidate filter | Implemented, unit-tested | `backend/izge/vision/` |
 | Per-stall "feeding time" pipeline (frozen DINOv3 backbone + classifier, human-label gate) | Partially implemented: code and training CLI exist; **no trained model is shipped and none has passed its acceptance gate** | `backend/izge/feeding/`, `docs/V1_PLAN.md` |
 | Animal detection and segmentation experiments (RF-DETR-Seg) | Experiments only, not wired into the worker | `experiments/`, `docs/DECISIONS.md` |
 | Posture classification | Research code behind an explicit human-label training gate; no trained model is shipped | `docs/POSTURE_TRAINING_GATE.md` |
 | Individual animal identification, behaviour classification, estrus/health detection | **Not implemented** | |
-| Authentication / authorization | **Not implemented.** Do not expose the API beyond localhost | `docs/ROADMAP.md` |
+| Optional shared bearer token for `/api/*` (`IZGE_API_TOKEN`) | Implemented and verified (unit tests and a live container). One shared secret; the bundled UI does not send it | `backend/izge/auth.py`, `SECURITY.md` |
+| User accounts, per-user authorization, TLS | **Not implemented.** Do not expose the API beyond localhost | `docs/ROADMAP.md` |
+| Dataset inventory/validation, authenticated native training runner (localhost), training control center | Implemented in `develop`; off by default, unit-tested where dependencies allow; GPU training itself not verified here | `backend/izge/datasets/`, `backend/izge/training/`, `docs/CONTROL_CENTER.md` |
 
-Work on a live-inference admin panel and live-camera tooling exists in unmerged branches and pull requests; it is not part of `main`.
+Live-inference admin pages and live-camera tooling exist in open pull requests and are not part of this baseline.
 
 ## Reproducible example (no database, no GPU, no real data)
 
@@ -44,14 +46,18 @@ Expected output (identical on every run with the default seed; verified on macOS
                "mostly_tracked_tracks": 2, "iou_threshold": 0.5 } }
 ```
 
-Tracker throughput on random synthetic boxes (CPU, tracker only, no detection): `uv run python scripts/bench_tracker.py --help`.
+Tracker throughput on random synthetic boxes (CPU, tracker only, no detection; 0.61 to 0.63 ms per update on an Apple M1 Pro): `uv run python scripts/bench_tracker.py`.
+
+### Metric correctness check you can verify by hand
+
+`backend/tests/test_score_tracks_cli.py` builds a 10-frame, single-track scene whose prediction changes ID after frame 5 and scores it with `scripts/score_tracks.py`. The expected values follow from the definitions: MOTA = 1 - 1/10 = 0.9, IDF1 = 2·5/(2·5+5+5) = 0.5, HOTA = sqrt(1.0 · 0.5) = 0.7071. The test asserts all three. Synthetic data, so it validates the metric code, not any tracker.
 
 ## Requirements
 
 - Python 3.14 (pinned: `>=3.14,<3.15`) and [uv](https://docs.astral.sh/uv/)
 - Node 22.18 or newer for the frontend (Node 18 fails to build it)
 - FFmpeg/ffprobe for video tests
-- Docker, for the full stack and the PostgreSQL 18 integration tests
+- Docker with Compose, for the full stack and the PostgreSQL 18 integration tests (verified with Docker 27.5)
 - Optional `ml` extra (PyTorch, transformers) and a Hugging Face token for the gated DINOv3 weights
 
 ## Run the tests
@@ -62,7 +68,7 @@ uv run ruff check backend scripts
 uv run pytest -q --ignore=backend/tests/test_integration.py --ignore=backend/tests/test_feeding_integration.py
 ```
 
-Last verified run for this README: ruff passed; 440 passed, 3 skipped in 126 s on macOS arm64 (no database, no GPU).
+Last verified run for this README (macOS arm64, Python 3.14.4, no database, no GPU): `ruff` passed; 485 passed, 8 skipped in 93 s. With the `ml` extra installed (`uv sync --frozen --extra ml`): 491 passed, 3 skipped. The remaining skips need `mlflow` and `pytorch_lightning` from the separate training environment. Unit-test line coverage of `backend/izge` is 66.9%; the reusable vision modules are at 97% to 100% (see `docs/oss-readiness/phase-2/TECHNICAL_VALIDATION.md`).
 
 Frontend:
 
@@ -76,10 +82,11 @@ PostgreSQL 18 integration tests use a disposable container and never touch a rea
 docker compose -f compose.test.yaml up -d --wait
 export DATABASE_URL=postgresql+psycopg://izge:izge-test@127.0.0.1:55432/izge_test PYTHONPATH=backend
 uv run alembic upgrade head
-IZGE_TEST_DATABASE=1 MEDIA_ROOT="$(mktemp -d)" uv run pytest -q backend/tests/test_integration.py
+IZGE_TEST_DATABASE=1 MEDIA_ROOT="$(mktemp -d)" uv run pytest -q backend/tests/test_integration.py backend/tests/test_feeding_integration.py
+docker compose -f compose.test.yaml down -v
 ```
 
-These integration commands follow `scripts/verify.sh` but **have not been run in this audit** because no Docker daemon was available.
+Verified on 2026-11-22: migration upgrade, downgrade to an empty schema, upgrade, and `alembic check` (no drift) succeed on PostgreSQL 18.0, and the 14 integration tests pass. Run `unset` on any `IZGE_*` variables first; ambient `IZGE_CAMERA_CONFIG_DIRS` used to change test results (now fixed in `conftest.py`).
 
 ## Run the application
 
@@ -88,7 +95,9 @@ cp .env.example .env
 docker compose up --build
 ```
 
-UI at http://127.0.0.1:8000, OpenAPI at http://127.0.0.1:8000/docs. The port binds to localhost only. This path was **not executed in this audit** (no Docker daemon); see [docs/oss-readiness/quality-validation.md](docs/oss-readiness/quality-validation.md).
+UI at http://127.0.0.1:8000, OpenAPI at http://127.0.0.1:8000/docs. The port binds to localhost only. Verified on 2026-11-22: the image builds, `db`, `api` and `worker` become healthy, `migrate` exits 0, `/api/health` returns ok. This only works with the `design/` build-context fix in this branch; before it, `docker compose up --build` failed at the frontend build. The first build downloads CPU PyTorch and takes several minutes.
+
+Browser e2e tests need the test-only camera fixtures: start the stack with `IZGE_CAMERA_CONFIG_DIRS=/app/config/cameras:/app/backend/tests/fixtures/cameras`, then `cd frontend && npx playwright install chromium && IZGE_E2E_URL=http://127.0.0.1:8000 npx playwright test`.
 
 The synthetic demo (`docker compose exec api python -m izge.demo`) creates a clearly labelled demo farm. Without a connected model, real uploads produce `unavailable` observations by design.
 
@@ -114,11 +123,14 @@ Details: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) (Turkish) and [docs/oss-re
 
 ## Known limitations
 
-- No authentication or authorization; single-tenant assumptions in several places.
+- Authentication is an opt-in single shared token; no accounts, authorization, TLS or rate limiting. Do not expose the API to untrusted networks.
+- One Playwright test (`fixture-smoke.spec.ts`) fails on the "ML deneyleri" page with mocked API data (element detached while clicking); the cause was not isolated.
+- The Docker image bundles PyAV's FFmpeg, which is a GPL-enabled build; do not publish the image without reading `docs/oss-readiness/phase-2/LICENSE_DECISION.md`.
+- Single-tenant assumptions in several places.
 - No trained model passes its acceptance gate. Any metric quoted in the repository is either synthetic (`origin=demo`) or explicitly model-derived and unvalidated.
 - Most project documentation is in Turkish.
 - `main` is behind `develop` and several open pull requests.
-- Python 3.14 and recent dependency versions are pinned; older interpreters are unsupported.
+- Python 3.14 and recent dependency versions are pinned; older interpreters are unsupported. Node 22.18 or newer is required for the frontend.
 - The repository still contains an unrelated agent-orchestration subproject (`harness/`) and internal planning documents; see the OSS readiness audit.
 - Some code and documentation were written with AI assistance (see Maintainers).
 
@@ -132,7 +144,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md). Security reports: [SECURITY.md](SECURITY
 
 ## Maintainers
 
-Created and maintained by Sevket Ugurel ([@sevketugurel](https://github.com/sevketugurel)), who authored about 99% of the commits. A large share of commits are co-authored with AI coding assistants (Claude, per commit trailers); all were reviewed and merged by the maintainer.
+Created and maintained by Sevket Ugurel ([@sevketugurel](https://github.com/sevketugurel)), who authored about 99% of the commits. About 86% of commits (239 of 277 on `develop`) carry co-author trailers for AI coding assistants (Claude Opus 5.5 and Sonnet 5.5). All pull requests were opened and merged by the maintainer; external review has not happened yet.
 
 ## License
 
