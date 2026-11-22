@@ -1,0 +1,105 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main, develop]
+
+# Least privilege: CI only reads the repository.
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  UV_FROZEN: "1"
+
+jobs:
+  backend:
+    name: Backend lint and unit tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
+        with:
+          python-version: "3.14"
+          enable-cache: true
+      - name: Install system FFmpeg (used by video tests)
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
+      - name: Install dependencies (CPU only, no ML extra)
+        run: uv sync --frozen
+      - name: Lint
+        run: uv run ruff check backend scripts
+      - name: Unit tests (no database, no GPU)
+        run: >-
+          uv run pytest -q -p no:cacheprovider
+          --ignore=backend/tests/test_integration.py
+          --ignore=backend/tests/test_feeding_integration.py
+
+  integration:
+    name: PostgreSQL 18 integration tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:18.0-bookworm
+        env:
+          POSTGRES_USER: izge
+          POSTGRES_PASSWORD: izge-test
+          POSTGRES_DB: izge_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U izge -d izge_test"
+          --health-interval 2s --health-timeout 3s --health-retries 30
+    env:
+      # Disposable CI service only; never point these tests at a real database.
+      DATABASE_URL: postgresql+psycopg://izge:izge-test@127.0.0.1:5432/izge_test
+      PYTHONPATH: backend
+      IZGE_TEST_DATABASE: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
+        with:
+          python-version: "3.14"
+          enable-cache: true
+      - name: Install system FFmpeg
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
+      - run: uv sync --frozen
+      - name: Migration round trip
+        run: |
+          uv run alembic upgrade head
+          uv run alembic downgrade base
+          uv run python scripts/check_empty_schema.py
+          uv run alembic upgrade head
+          uv run alembic check
+      - name: Integration tests
+        run: |
+          export MEDIA_ROOT="$(mktemp -d)"
+          uv run pytest -q -p no:cacheprovider backend/tests/test_integration.py
+
+  frontend:
+    name: Frontend type-check and build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22.18"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - run: npm run build
