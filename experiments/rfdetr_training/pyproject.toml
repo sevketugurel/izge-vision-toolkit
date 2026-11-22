@@ -5,7 +5,7 @@ requires-python = ">=3.12,<3.13"
 dependencies = [
   "rfdetr[train]==1.11.2", "torch==2.14.1", "torchvision==0.29.1",
   "transformers==5.19.0", "pytorch-lightning==2.6.6", "torchmetrics==1.8.2",
-  "numpy==2.5.4", "scipy==1.18.1", "pillow==12.3.0", "pycocotools==2.0.11",
+  "numpy==2.5.4", "scipy==1.18.1", "pillow==13.0.0", "pycocotools==2.0.11",
   "nbformat==5.10.4",
 ]
 
