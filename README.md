@@ -153,4 +153,4 @@ The two early project-overview documents were written by Enes Beşiktaş ([@Enes
 
 ## License
 
-**No license has been chosen yet**, so by default all rights are reserved and the code is not open source. Third-party licence notes: [docs/THIRD_PARTY_LICENSES.md](docs/THIRD_PARTY_LICENSES.md). Models such as DINOv3 carry their own licence terms.
+Licensed under the Apache License 2.0; see [LICENSE](LICENSE) and [NOTICE](NOTICE). Third-party components: [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) and [docs/THIRD_PARTY_LICENSES.md](docs/THIRD_PARTY_LICENSES.md). Model weights (for example DINOv3, "Built with DINOv3") carry their own licenses and are not covered.
