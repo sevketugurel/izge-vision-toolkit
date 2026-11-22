@@ -3,6 +3,8 @@ WORKDIR /build/frontend
 COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci
 COPY frontend/ ./
+# src/motion/presets.ts imports ../../../design/motion-tokens.json (= /build/design)
+COPY design/ /build/design/
 RUN npm run build
 COPY scripts/frontend_licenses.mjs /build/scripts/frontend_licenses.mjs
 RUN node /build/scripts/frontend_licenses.mjs
