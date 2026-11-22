@@ -16,8 +16,8 @@ def run_verify(tmp_path, docker_status=None, require=False, docker_host="", fail
                node_status=0, require_node=False, node_version="v22.18.0",
                node_versions=None, runtime_status=0, frontend_statuses=(0,),
                frontend_output="", frontend_stderr=False, frontend_step="run",
-               frontend_retry_output=None):
-    for directory in ("scripts", "harness", "frontend", "bin"):
+               frontend_retry_output=None, harness=True):
+    for directory in ("scripts", "harness", "frontend", "bin") if harness else ("scripts", "frontend", "bin"):
         (tmp_path / directory).mkdir()
     for name in ("verify.sh", "verify_docker.sh"):
         shutil.copyfile(ROOT / "scripts" / name, tmp_path / "scripts" / name)
@@ -105,6 +105,16 @@ def run_verify(tmp_path, docker_status=None, require=False, docker_host="", fail
     )
     assert not list(tmp_path.glob("izge-verify.*")), "temporary media must be cleaned up"
     return result, log.read_text() if log.exists() else ""
+
+
+def test_missing_harness_directory_is_skipped_not_fatal(tmp_path):
+    # The public release ships without harness/; verify.sh must still run every other step.
+    result, calls = run_verify(tmp_path, None, harness=False)
+    assert result.returncode == 0, result.stderr
+    assert "SKIP: harness (dizin yok)" in result.stdout
+    assert "uv run --frozen ruff check src tests\n" not in calls
+    assert "uv run ruff check backend scripts\n" in calls
+    assert "npm run build --prefix frontend\n" in calls
 
 
 @pytest.mark.parametrize("docker_status", [None, 1])

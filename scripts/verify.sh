@@ -47,8 +47,13 @@ PYTHONUNBUFFERED=1 uv run pytest -q -p no:cacheprovider --ignore=backend/tests/t
   --ignore=backend/tests/test_feeding_integration.py
 
 step "Harness birim testleri"
-(cd harness && uv sync --frozen && uv run --frozen ruff check src tests \
-  && uv run --frozen pytest -q -p no:cacheprovider)
+# harness/ is a private development tool and is absent from the public release; skip it there.
+if [ -d harness ]; then
+  (cd harness && uv sync --frozen && uv run --frozen ruff check src tests \
+    && uv run --frozen pytest -q -p no:cacheprovider)
+else
+  printf 'SKIP: harness (dizin yok)\n'
+fi
 
 step "PostgreSQL 18 (Compose) + migration gidiş-dönüş"
 if verify_docker_step postgres; then
