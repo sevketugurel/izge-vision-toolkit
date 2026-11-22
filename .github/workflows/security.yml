@@ -48,6 +48,11 @@ jobs:
         run: |
           uv export --frozen --no-hashes --extra ml --extra gcp --no-emit-project -o requirements-audit.txt
           uvx pip-audit==2.10.1 -r requirements-audit.txt --no-deps --disable-pip
+      - name: Audit the separate RF-DETR training lock
+        # torch/torchvision are CUDA local-version wheels (not on PyPI) and are reported as skipped.
+        run: |
+          uv export --frozen --no-hashes --no-emit-project --project experiments/rfdetr_training -o requirements-training.txt
+          uvx pip-audit==2.10.1 -r requirements-training.txt --no-deps --disable-pip
 
   npm-audit:
     name: npm audit (frontend and panel, production dependencies)

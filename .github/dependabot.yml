@@ -5,10 +5,14 @@ updates:
     schedule:
       interval: weekly
   - package-ecosystem: uv
-    directory: /
+    directories: [/, /experiments/rfdetr_training]
     schedule:
       interval: weekly
   - package-ecosystem: npm
     directory: /frontend
     schedule:
       interval: weekly
+    groups:
+      # react, react-dom and their types must move together (a lone react-dom bump fails the build).
+      react:
+        patterns: ["react", "react-dom", "@types/react", "@types/react-dom"]
